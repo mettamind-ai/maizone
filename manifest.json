@@ -20,7 +20,9 @@
     "alarms",
     "webNavigation",
     "notifications",
-    "tabs"
+    "tabs",
+    "offscreen",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "http://*/*",
@@ -32,6 +34,12 @@
         "default": "Alt+A"
       },
       "description": "Thử nhắc nghỉ ngơi"
+    },
+    "clipmd-markdown": {
+      "suggested_key": {
+        "default": "Alt+D"
+      },
+      "description": "Copy Markdown (chọn element)"
     }
   },
   "background": {

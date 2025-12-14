@@ -4,6 +4,7 @@
  * @feature f00 - Text Input Detection
  * @feature f01 - Distraction Blocking (UI part)
  * @feature f04c - Deep Work Mode Integration
+ * @feature f06 - ClipMD (Clipboard to Markdown)
  */
 
 /******************************************************************************
@@ -71,7 +72,9 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   checkCurrentUrl: 'checkCurrentUrl',
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
-  distractingWebsite: 'distractingWebsite'
+  distractingWebsite: 'distractingWebsite',
+  clipmdStart: 'clipmdStart',
+  clipmdConvertMarkdown: 'clipmdConvertMarkdown'
 });
 
 // Global variables
@@ -362,12 +365,193 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
+  if (message?.action === messageActions.clipmdStart) {
+    startClipmdPickMode();
+    sendResponse({ received: true });
+    return true;
+  }
+
   if (!isExtensionEnabled) return false;
   if (message?.action !== messageActions.distractingWebsite) return false;
 
   showDistractionWarning(message.data);
   sendResponse({ received: true });
   return true;
+}
+
+/******************************************************************************
+ * CLIPMD (CLIPBOARD TO MARKDOWN) [f06]
+ ******************************************************************************/
+
+let isClipmdPickModeActive = false;
+let clipmdHintEl = null;
+let clipmdCleanupFn = null;
+
+/**
+ * Create a small hint UI for ClipMD pick mode.
+ * @param {string} text - Hint text
+ * @returns {HTMLDivElement}
+ */
+function createClipmdHint(text) {
+  const hint = document.createElement('div');
+  hint.id = 'mai-clipmd-hint';
+  Object.assign(hint.style, {
+    position: 'fixed',
+    top: '12px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: '99999999',
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    color: 'white',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    maxWidth: '92vw',
+    boxShadow: '0 6px 18px rgba(0,0,0,0.3)'
+  });
+
+  const label = document.createElement('span');
+  label.textContent = text;
+  label.style.lineHeight = '1.2';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.textContent = 'Hủy (ESC)';
+  Object.assign(cancelBtn.style, {
+    backgroundColor: 'transparent',
+    color: 'white',
+    border: '1px solid rgba(255,255,255,0.6)',
+    padding: '6px 10px',
+    borderRadius: '999px',
+    cursor: 'pointer',
+    fontSize: '12px'
+  });
+
+  cancelBtn.addEventListener('click', (event) => {
+    if (!event?.isTrusted) return;
+    stopClipmdPickMode();
+  });
+
+  hint.appendChild(label);
+  hint.appendChild(cancelBtn);
+
+  return hint;
+}
+
+/**
+ * Update hint text for ClipMD.
+ * @param {string} text - New text
+ * @returns {void}
+ */
+function setClipmdHintText(text) {
+  try {
+    const label = clipmdHintEl?.querySelector?.('span');
+    if (!label) return;
+    label.textContent = text;
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Stop ClipMD pick mode and clean up listeners/UI.
+ * @returns {void}
+ */
+function stopClipmdPickMode() {
+  isClipmdPickModeActive = false;
+  if (typeof clipmdCleanupFn === 'function') clipmdCleanupFn();
+  clipmdCleanupFn = null;
+}
+
+/**
+ * Start ClipMD pick mode: click an element to copy its Markdown.
+ * @returns {void}
+ */
+function startClipmdPickMode() {
+  try {
+    if (isClipmdPickModeActive) return;
+    isClipmdPickModeActive = true;
+
+    document.getElementById('mai-clipmd-hint')?.remove?.();
+    clipmdHintEl = createClipmdHint('🌸 Chọn phần bạn muốn copy Markdown (click vào element)');
+    document.body.appendChild(clipmdHintEl);
+
+    const onKeyDown = (event) => {
+      if (event?.key === 'Escape') {
+        event.preventDefault?.();
+        stopClipmdPickMode();
+      }
+    };
+
+    const onClickCapture = (event) => {
+      if (!isClipmdPickModeActive) return;
+      if (!event?.isTrusted) return;
+
+      // Allow clicks on our hint (cancel button).
+      if (clipmdHintEl && clipmdHintEl.contains(event.target)) return;
+
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      event.stopImmediatePropagation?.();
+
+      isClipmdPickModeActive = false; // single pick
+      setClipmdHintText('🌸 Đang tạo Markdown...');
+
+      const el = event.target;
+      const html = typeof el?.outerHTML === 'string' ? el.outerHTML : '';
+      const maxChars = 300_000;
+      if (!html || html.length > maxChars) {
+        setClipmdHintText('🌸 Phần bạn chọn quá lớn. Hãy chọn một phần nhỏ hơn.');
+        setTimeout(() => stopClipmdPickMode(), 1500);
+        return;
+      }
+
+      sendMessageSafely(
+        { action: messageActions.clipmdConvertMarkdown, data: { html } },
+        { timeoutMs: 8000 }
+      )
+        .then(async (response) => {
+          const markdown = typeof response?.markdown === 'string' ? response.markdown : '';
+          if (!response?.success || !markdown) {
+            setClipmdHintText('🌸 Không thể tạo Markdown lúc này. Thử lại nhé.');
+            setTimeout(() => stopClipmdPickMode(), 1500);
+            return;
+          }
+
+          try {
+            await navigator.clipboard.writeText(markdown);
+            setClipmdHintText('🌸 Đã copy Markdown! (Ctrl+V để dán)');
+          } catch (error) {
+            console.error('🌸🌸🌸 Error writing clipboard:', error);
+            setClipmdHintText('🌸 Copy thất bại. Trang này có thể chặn clipboard.');
+          }
+
+          setTimeout(() => stopClipmdPickMode(), 1200);
+        })
+        .catch((error) => {
+          console.error('🌸🌸🌸 Error converting markdown:', error);
+          setClipmdHintText('🌸 Có lỗi khi tạo Markdown. Thử lại nhé.');
+          setTimeout(() => stopClipmdPickMode(), 1500);
+        });
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('click', onClickCapture, true);
+
+    clipmdCleanupFn = () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('click', onClickCapture, true);
+      clipmdHintEl?.remove?.();
+      clipmdHintEl = null;
+    };
+  } catch (error) {
+    console.error('🌸🌸🌸 Error starting ClipMD mode:', error);
+    stopClipmdPickMode();
+  }
 }
 
 /******************************************************************************

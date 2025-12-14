@@ -12,10 +12,11 @@ globalThis.MAIZONE_ACTIONS = Object.freeze({
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
+  clipmdStart: 'clipmdStart',
+  clipmdConvertMarkdown: 'clipmdConvertMarkdown',
   resetBreakReminder: 'resetBreakReminder',
   getBreakReminderState: 'getBreakReminderState',
   getState: 'getState',
   updateState: 'updateState',
   stateUpdated: 'stateUpdated'
 });
-

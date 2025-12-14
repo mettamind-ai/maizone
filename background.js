@@ -5,11 +5,13 @@
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  * @feature f05 - State Management
+ * @feature f06 - ClipMD (Clipboard to Markdown)
  */
 
 import { ensureInitialized, setupStateListeners } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
+import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -40,6 +42,7 @@ function initBackgroundScript() {
     // Initialize feature modules
     initDistraction();
     initBreakReminder();
+    initClipmd();
     
     // Set up event listeners
     setupEventListeners();
@@ -75,6 +78,10 @@ function handleCommand(command) {
   if (command === 'test-break-reminder') {
     sendBreakReminder();
     console.log('🌸 Break reminder sent successfully');
+  } else if (command === 'clipmd-markdown') {
+    startClipmdMarkdownPicker().catch((error) => {
+      console.error('🌸🌸🌸 Error starting ClipMD:', error);
+    });
   }
 }
 
