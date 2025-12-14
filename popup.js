@@ -67,6 +67,26 @@ function initializePopup() {
  ******************************************************************************/
 
 /**
+ * Get the label element containing the countdown (avoid :has() for compatibility)
+ */
+function getBreakReminderLabel() {
+  if (!breakReminderCountdown) return null;
+  const label = breakReminderCountdown.parentElement;
+  if (!label || !label.classList?.contains('switch-label')) return null;
+  return label;
+}
+
+/**
+ * Update the break reminder label text while preserving the countdown element
+ */
+function setBreakReminderLabelText(text) {
+  const label = getBreakReminderLabel();
+  if (!label || !breakReminderCountdown) return;
+  label.textContent = `${text} `;
+  label.appendChild(breakReminderCountdown);
+}
+
+/**
  * Load state from background script
  */
 function loadState() {
@@ -119,12 +139,7 @@ function updateUI(state) {
   
   // Update task label if in deep work
   if (state.isInFlow) {
-    const breakReminderLabel = document.querySelector('.switch-label:has(#break-reminder-countdown)');
-    if (breakReminderLabel) {
-      const countdown = breakReminderLabel.querySelector('#break-reminder-countdown');
-      breakReminderLabel.innerHTML = 'Deep Working... ';
-      breakReminderLabel.appendChild(countdown);
-    }
+    setBreakReminderLabelText('Deep Working...');
   }
   
   // Update enabled state UI
@@ -153,18 +168,7 @@ function handleStateUpdate(updates) {
     taskInput.disabled = updates.isInFlow;
     
     // Update task label
-    const breakReminderLabel = document.querySelector('.switch-label:has(#break-reminder-countdown)');
-    if (breakReminderLabel) {
-      const countdown = breakReminderLabel.querySelector('#break-reminder-countdown');
-      
-      if (updates.isInFlow) {
-        breakReminderLabel.innerHTML = 'Deep Working... ';
-        breakReminderLabel.appendChild(countdown);
-      } else {
-        breakReminderLabel.innerHTML = 'Deep Work Time Block ';
-        breakReminderLabel.appendChild(countdown);
-      }
-    }
+    setBreakReminderLabelText(updates.isInFlow ? 'Deep Working...' : 'Deep Work Time Block');
   }
   
   if ('currentTask' in updates) {
@@ -189,7 +193,7 @@ function updateEnabledState(isEnabled) {
     // Set task input state based on current flow state
     sendMessageSafely({ action: 'getState', key: 'isInFlow' })
       .then(state => {
-        taskInput.disabled = state.isInFlow;
+        taskInput.disabled = !!state?.isInFlow;
       });
   }
 }
@@ -228,12 +232,7 @@ function handleToggle(settingKey) {
     taskInput.disabled = false;
     
     // Reset label
-    const breakReminderLabel = document.querySelector('.switch-label:has(#break-reminder-countdown)');
-    if (breakReminderLabel) {
-      const countdown = breakReminderLabel.querySelector('#break-reminder-countdown');
-      breakReminderLabel.innerHTML = 'Deep Work Time Block ';
-      breakReminderLabel.appendChild(countdown);
-    }
+    setBreakReminderLabelText('Deep Work Time Block');
     
     // Clear badge
     chrome.action.setBadgeText({ text: '' });
@@ -295,12 +294,7 @@ function setCurrentTask() {
     breakReminderToggle.checked = true;
     
     // Update label
-    const breakReminderLabel = document.querySelector('.switch-label:has(#break-reminder-countdown)');
-    if (breakReminderLabel) {
-      const countdown = breakReminderLabel.querySelector('#break-reminder-countdown');
-      breakReminderLabel.innerHTML = 'Deep Working... ';
-      breakReminderLabel.appendChild(countdown);
-    }
+    setBreakReminderLabelText('Deep Working...');
     
     // Update status message temporarily
     statusText.textContent = `Mai sẽ giúp bạn tập trung vào: ${task}`;
@@ -346,23 +340,6 @@ function updateCountdownTimer() {
       
       if (remaining <= 0) {
         breakReminderCountdown.textContent = '(00:00)';
-        
-        // Reset task and flow state
-        sendMessageSafely({
-          action: 'updateState',
-          payload: {
-            isInFlow: false,
-            currentTask: '',
-            breakReminderEnabled: false
-          }
-        }).catch(err => console.error('🌸 Error updating state:', err));
-        
-        // End deep work mode
-        sendMessageSafely({ action: 'endDeepWork' }).catch(err => console.error('🌸 Error ending deep work:', err));
-        
-        // Trigger break reminder
-        sendMessageSafely({ action: 'testBreakReminder' }).catch(err => console.error('🌸 Error sending break reminder:', err));
-        
         return;
       }
       
@@ -391,7 +368,7 @@ function updateCurrentStatus() {
     // Get enabled state
     sendMessageSafely({ action: 'getState', key: 'isEnabled' })
       .then(state => {
-        if (!state.isEnabled) {
+        if (!state || !state.isEnabled) {
           statusText.textContent = 'Mai đang ngủ. Nhấn kích hoạt để đánh thức.';
           return;
         }
@@ -453,8 +430,9 @@ async function sendMessageSafely(message) {
           clearTimeout(timeoutId);
           
           // Check for chrome runtime errors
-          if (chrome.runtime.lastError) {
-            console.warn('🌸🌸🌸 Chrome runtime error:', chrome.runtime.lastError.message);
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            console.warn('🌸🌸🌸 Chrome runtime error:', lastError.message || String(lastError));
             resolve(null);
             return;
           }

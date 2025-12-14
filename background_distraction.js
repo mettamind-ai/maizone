@@ -228,7 +228,8 @@ async function sendMessageToTabSafely(tabId, message) {
   try {
     return await chrome.tabs.sendMessage(tabId, message);
   } catch (error) {
-    if (error.message.includes('Extension context invalidated')) {
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Extension context invalidated')) {
       // Expected during page unload or extension update - ignore silently
       return null;
     }

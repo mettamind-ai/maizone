@@ -93,9 +93,35 @@ function initialize() {
  */
 async function sendMessageSafely(message) {
   try {
-    return await chrome.runtime.sendMessage(message);
+    if (!chrome.runtime || chrome.runtime.id === undefined) {
+      return null;
+    }
+
+    const response = await new Promise((resolve) => {
+      const timeoutId = setTimeout(() => resolve(null), 2000);
+
+      try {
+        chrome.runtime.sendMessage(message, (reply) => {
+          clearTimeout(timeoutId);
+
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            resolve(null);
+            return;
+          }
+
+          resolve(reply);
+        });
+      } catch (innerError) {
+        clearTimeout(timeoutId);
+        resolve(null);
+      }
+    });
+
+    return response;
   } catch (error) {
-    if (error.message.includes('Extension context invalidated')) {
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Extension context invalidated')) {
       // Expected during page unload or extension update - ignore silently
       return null;
     }
@@ -127,7 +153,8 @@ function handleFocusIn(event) {
       });
     }
   } catch (error) {
-    if (error.message.includes('Extension context invalidated')) {
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Extension context invalidated')) {
       // Extension was updated or reloaded - quietly fail
       console.warn('🌸🌸🌸 Extension context invalidated during focus handling');
       return;
@@ -146,7 +173,8 @@ function handleClick(event) {
       setCurrentElement(element);
     }
   } catch (error) {
-    if (error.message.includes('Extension context invalidated')) {
+    const errorMessage = error?.message || String(error);
+    if (errorMessage.includes('Extension context invalidated')) {
       // Extension was updated or reloaded - quietly fail
       console.warn('🌸🌸🌸 Extension context invalidated during click handling');
       return;
