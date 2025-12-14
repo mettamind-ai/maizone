@@ -8,6 +8,7 @@
 import { ensureInitialized, getState, onStateDelta } from './background_state.js';
 import { sendMessageToTabSafely } from './messaging.js';
 import { messageActions } from './actions.js';
+import { getDistractionMatch } from './distraction_matcher.js';
 
 /***** WARNING DEBOUNCE *****/
 
@@ -285,43 +286,13 @@ async function isDistractingWebsite(url) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
 
     await ensureInitialized();
-    const { hostname } = new URL(url);
-    const normalized = hostname.toLowerCase().replace(/^www\./, '');
-    
-    const { distractingSites, deepWorkBlockedSites, isInFlow, blockDistractions, isEnabled } = getState();
-    
-    // If blocking is disabled, return false
-    if (!blockDistractions || !isEnabled) return false;
+    const state = getState();
 
-    console.log(`🌸 Checking distraction for ${normalized}. Deep work mode: ${isInFlow}`);
+    const match = getDistractionMatch(url, state);
+    if (!match.isDistracting) return false;
 
-    // Check standard distracting sites
-    const isDistracting = distractingSites.some((site) => {
-      const s = site.toLowerCase().replace(/^www\./, '');
-      return normalized === s || normalized.endsWith('.' + s);
-    });
-
-    if (isDistracting) {
-      console.log(`🌸 Standard distracting site detected: ${normalized}`);
-      return true;
-    }
-
-    // If in Deep Work mode, also check deep work blocked sites
-    if (isInFlow) {
-      console.log(`🌸 In Deep Work mode. Checking if ${normalized} is in the blocked list`);
-      
-      const isDeepWorkBlocked = deepWorkBlockedSites.some((site) => {
-        const s = site.toLowerCase().replace(/^www\./, '');
-        return normalized === s || normalized.endsWith('.' + s);
-      });
-      
-      if (isDeepWorkBlocked) {
-        console.log(`🌸 Deep Work mode active: Blocking messaging site ${normalized}`);
-        return true;
-      }
-    }
-
-    return false;
+    console.log(`🌸 Trang gây sao nhãng được phát hiện: ${match.hostname || 'unknown'}`);
+    return true;
   } catch (err) {
     console.error('🌸🌸🌸 Error checking URL:', err);
     return false;
@@ -357,18 +328,13 @@ async function handleWebNavigation(details) {
  */
 function sendWarningToTab(tabId, url) {
   try {
-    const { isInFlow, deepWorkBlockedSites } = getState();
-    
-    // Check if URL is in deep work blocked sites
-    const { hostname } = new URL(url);
-    const normalized = hostname.toLowerCase().replace(/^www\./, '');
-    
-    const isDeepWorkBlocked = deepWorkBlockedSites.some(site => {
-      const s = site.toLowerCase().replace(/^www\./, '');
-      return normalized === s || normalized.endsWith('.' + s);
-    });
+    const state = getState();
+    const match = getDistractionMatch(url, state);
+    const isInFlow = !!state.isInFlow;
+    const isDeepWorkBlocked = !!match.isDeepWorkBlocked;
 
-    console.log(`🌸 Sending warning. Host: ${normalized}. Deep work: ${isInFlow}, Is messaging site: ${isDeepWorkBlocked}`);
+    const hostForLog = match.hostname || getHostnameForLog(url);
+    console.log(`🌸 Sending warning. Host: ${hostForLog || 'unknown'}. Deep work: ${isInFlow}`);
 
     const modeKey = isInFlow ? (isDeepWorkBlocked ? 'deepWorkBlocked' : 'deepWork') : 'normal';
     if (!shouldSendWarning(tabId, url, modeKey)) return;

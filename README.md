@@ -37,10 +37,10 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |<!--r0 c1-->Tag|<!--r0 c2-->Tên                      |<!--r0 c3-->Tính năng                                       |<!--r0 c4-->Files liên quan|<!--r0 c5-->Hàm chính|<!--r0 c6-->Shortcut / UI|<!--r0 c7-->Trạng_thái|
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
 |<!--r1 c1-->f00|<!--r1 c2-->Text Input Detection     |<!--r1 c3-->Phát hiện và theo dõi người dùng nhập liệu      |<!--r1 c4-->`content.js`   |<!--r1 c5-->`handleFocusIn()`, `handleKeyDown()`  | — |<!--r1 c7-->✅ Done |
-|<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `content.js` |<!--r2 c5-->`isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
+|<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `distraction_matcher.js`, `content.js` |<!--r2 c5-->`getDistractionMatch()`, `isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
 |<!--r3 c1-->f02|<!--r3 c2-->AI Text Prediction (Removed) |<!--r3 c3-->Đã loại bỏ (không dùng LLM key)                 |<!--r3 c4-->— |<!--r3 c5-->— | — |<!--r3 c7-->🚫 Removed |
 |<!--r4 c1-->f03|<!--r4 c2-->Break Reminder           |<!--r4 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r4 c4-->`background_breakReminder.js`, `popup.js` |<!--r4 c5-->`sendBreakReminder()`, `startBreakReminder()` | **Alt + A** |<!--r4 c7-->✅ Done |
-|<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_breakReminder.js`, `background_distraction.js`, `popup.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter** |<!--r5 c7-->✅ Done |
+|<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_breakReminder.js`, `background_distraction.js`, `distraction_matcher.js`, `popup.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter** |<!--r5 c7-->✅ Done |
 |<!--r6 c1-->f05|<!--r6 c2-->State Management         |<!--r6 c3-->Đồng bộ hóa trạng thái toàn extension           |<!--r6 c4-->`background_state.js`, `state_core.js`, `state_contract.js`, `state_helpers.js`, `actions.js`, `actions_global.js`, `messaging.js` |<!--r6 c5-->`ensureInitialized()`, `getState()`, `updateState()`, `sanitizeStoredState()` | — |<!--r6 c7-->✅ Done   |
 
 **Note**:
@@ -77,3 +77,12 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
   - [ ] Phát âm thanh chuông mindfulness để đưa người dùng về hiện tại
 
 **🌸🌸 DOING 🌸🌸**
+
+
+---
+
+
+## Testing
+
+- Unit tests (no bundler/deps): `node --test` (hoặc `npm test`).
+- Smoke test nhanh: bật **Kích hoạt Mai** + **Chặn trang web gây sao nhãng**, sau đó mở `https://facebook.com` và kiểm tra overlay cảnh báo.
