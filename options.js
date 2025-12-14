@@ -31,7 +31,7 @@ async function initOptions() {
   // Listen for state updates
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.action === messageActions.stateUpdated) {
-      handleStateUpdate(message.state);
+      handleStateUpdate(message.delta || message.state);
     }
   });
 }

@@ -6,6 +6,7 @@
 
 import { sendMessageSafely } from './messaging.js';
 import { messageActions } from './actions.js';
+import { computeNextState, diffState, sanitizeStoredState } from './state_core.js';
 
 /***** GET STATE *****/
 
@@ -22,17 +23,25 @@ export async function getStateSafely(keyOrKeys = null) {
   const state = await sendMessageSafely(request);
   if (state) return state;
 
-  return await new Promise((resolve) => {
-    if (Array.isArray(keyOrKeys)) {
-      chrome.storage.local.get(keyOrKeys, (data) => resolve(data || {}));
-      return;
-    }
-    if (typeof keyOrKeys === 'string') {
-      chrome.storage.local.get([keyOrKeys], (data) => resolve(data || {}));
-      return;
-    }
+  const storedState = await new Promise((resolve) => {
     chrome.storage.local.get(null, (data) => resolve(data || {}));
   });
+
+  const sanitized = sanitizeStoredState(storedState);
+
+  if (Array.isArray(keyOrKeys)) {
+    const subset = {};
+    keyOrKeys.forEach((k) => {
+      subset[k] = sanitized[k];
+    });
+    return subset;
+  }
+
+  if (typeof keyOrKeys === 'string') {
+    return { [keyOrKeys]: sanitized[keyOrKeys] };
+  }
+
+  return sanitized;
 }
 
 /***** UPDATE STATE *****/
@@ -48,6 +57,16 @@ export async function updateStateSafely(payload) {
   const response = await sendMessageSafely({ action: messageActions.updateState, payload });
   if (response?.success) return true;
 
-  await new Promise((resolve) => chrome.storage.local.set(payload, () => resolve()));
+  const storedState = await new Promise((resolve) => {
+    chrome.storage.local.get(null, (data) => resolve(data || {}));
+  });
+
+  const currentState = sanitizeStoredState(storedState);
+  const nextState = computeNextState(currentState, payload);
+  const delta = diffState(currentState, nextState);
+
+  if (!Object.keys(delta).length) return true;
+
+  await new Promise((resolve) => chrome.storage.local.set(delta, () => resolve()));
   return true;
 }

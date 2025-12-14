@@ -5,9 +5,47 @@
  * @feature f04 - Deep Work Mode (integration part)
  */
 
-import { getState } from './background_state.js';
+import { ensureInitialized, getState } from './background_state.js';
 import { sendMessageToTabSafely } from './messaging.js';
 import { messageActions } from './actions.js';
+
+/***** WARNING DEBOUNCE *****/
+
+const WARNING_COOLDOWN_MS = 4000;
+const lastWarningByTabId = new Map();
+
+/**
+ * Normalize URL to a stable key for debounce.
+ * @param {string} url - Full URL
+ * @returns {string}
+ */
+function getWarningKey(url) {
+  try {
+    const { hostname } = new URL(url);
+    return hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return String(url || '');
+  }
+}
+
+/**
+ * Decide whether to warn again for the same tab/site within a cooldown.
+ * @param {number} tabId - Chrome tab id
+ * @param {string} url - Current URL
+ * @returns {boolean}
+ */
+function shouldSendWarning(tabId, url) {
+  if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return true;
+
+  const key = getWarningKey(url);
+  const now = Date.now();
+  const previous = lastWarningByTabId.get(tabId);
+
+  if (previous && previous.key === key && now - previous.ts < WARNING_COOLDOWN_MS) return false;
+
+  lastWarningByTabId.set(tabId, { key, ts: now });
+  return true;
+}
 
 /**
  * Initialize distraction blocking if enabled
@@ -43,7 +81,7 @@ function setupMessageListeners() {
       return true;
     }
     else if (message.action === messageActions.stateUpdated) {
-      handleStateUpdated(message.state);
+      handleStateUpdated(message.delta || message.state);
       return false;
     }
     return false;
@@ -53,7 +91,8 @@ function setupMessageListeners() {
 /**
  * Ensure webNavigation listeners match current state.
  */
-function syncDistractionBlocking() {
+async function syncDistractionBlocking() {
+  await ensureInitialized();
   const { isEnabled, blockDistractions } = getState();
   const shouldEnable = !!(isEnabled && blockDistractions);
 
@@ -125,6 +164,10 @@ function disableDistractionsBlocking() {
  */
 async function isDistractingWebsite(url) {
   try {
+    if (typeof url !== 'string') return false;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+
+    await ensureInitialized();
     const { hostname } = new URL(url);
     const normalized = hostname.toLowerCase().replace(/^www\./, '');
     
@@ -174,6 +217,9 @@ async function isDistractingWebsite(url) {
 async function handleWebNavigation(details) {
   if (details.frameId !== 0) return;
   if (!details.url || details.url === 'about:blank') return;
+  if (!details.url.startsWith('http://') && !details.url.startsWith('https://')) return;
+
+  await ensureInitialized();
 
   const { isEnabled, blockDistractions } = getState();
   if (!isEnabled || !blockDistractions) {
@@ -193,6 +239,8 @@ async function handleWebNavigation(details) {
  */
 function sendWarningToTab(tabId, url) {
   try {
+    if (!shouldSendWarning(tabId, url)) return;
+
     const { isInFlow, deepWorkBlockedSites } = getState();
     
     // Check if URL is in deep work blocked sites
@@ -237,6 +285,8 @@ async function onCheckCurrentUrl(data, tab, sendResponse) {
     sendResponse({ received: false, error: 'No URL' });
     return;
   }
+
+  await ensureInitialized();
   
   console.log('🌸 Checking URL for distractions:', data.url);
   

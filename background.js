@@ -7,7 +7,7 @@
  * @feature f05 - State Management
  */
 
-import { initState, setupStateListeners } from './background_state.js';
+import { ensureInitialized, setupStateListeners } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
@@ -15,14 +15,11 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 /**
  * Initialize background script
  */
-async function initBackgroundScript() {
+function initBackgroundScript() {
   console.info('🌸 Mai background script initializing...');
   
   try {
-    // Initialize state first
-    const state = await initState();
-    console.info('🌸 State initialized:', state);
-    
+    // MV3 reliability: register listeners synchronously (avoid missing wake events).
     setupStateListeners();
     
     // Initialize feature modules
@@ -32,6 +29,11 @@ async function initBackgroundScript() {
     // Set up event listeners
     setupEventListeners();
     
+    // Hydrate state after listeners are ready (safe with MV3 service worker lifecycle).
+    ensureInitialized()
+      .then((state) => console.info('🌸 State ready:', state))
+      .catch((error) => console.error('🌸🌸🌸 Error hydrating state:', error));
+
     console.info('🌸 Mai background script loaded successfully');
   } catch (error) {
     console.error('🌸🌸🌸 Error initializing background script:', error);

@@ -5,7 +5,7 @@
  * @feature f04 - Deep Work Mode (timer integration)
  */
 
-import { getState, updateState } from './background_state.js';
+import { ensureInitialized, getState, updateState } from './background_state.js';
 import { BREAK_REMINDER_INTERVAL, BREAK_REMINDER_MESSAGES } from './constants.js';
 import { messageActions } from './actions.js';
 
@@ -23,7 +23,12 @@ const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
 export function initBreakReminder() {
   setupMessageListeners();
   setupAlarmListeners();
-  initializeBreakReminderIfEnabled();
+  ensureInitialized()
+    .then(() => initializeBreakReminderIfEnabled())
+    .catch((error) => {
+      console.error('🌸🌸🌸 Error initializing break reminder:', error);
+      initializeBreakReminderIfEnabled();
+    });
 }
 
 /***** MESSAGING *****/
@@ -47,7 +52,7 @@ function setupMessageListeners() {
     }
 
     if (message.action === messageActions.stateUpdated) {
-      handleStateUpdated(message.state);
+      handleStateUpdated(message.delta || message.state);
       return false;
     }
 
@@ -97,8 +102,10 @@ function setupAlarmListeners() {
  * @param {chrome.alarms.Alarm} alarm - Alarm object
  * @returns {void}
  */
-function handleAlarm(alarm) {
+async function handleAlarm(alarm) {
   if (!alarm?.name) return;
+
+  await ensureInitialized();
 
   if (alarm.name === BREAK_REMINDER_BADGE_ALARM) {
     updateBadgeWithTimerDisplay();
@@ -140,6 +147,12 @@ function stopBreakReminder() {
   } catch (error) {
     console.warn('🌸🌸🌸 Error clearing break reminder alarms:', error);
   }
+
+  try {
+    chrome.action?.setBadgeText({ text: '' });
+  } catch (error) {
+    console.warn('🌸🌸🌸 Error clearing break reminder badge:', error);
+  }
 }
 
 /***** TIMER CORE *****/
@@ -161,7 +174,6 @@ function initializeBreakReminderIfEnabled() {
 
   if (!breakReminderEnabled || !isEnabled || !isInFlow || !currentTask) {
     stopBreakReminder();
-    chrome.action.setBadgeText({ text: '' });
     return;
   }
 
@@ -223,7 +235,6 @@ function startBreakReminder(customInterval) {
 
   const { isEnabled, isInFlow, currentTask, breakReminderEnabled } = getState();
   if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
-    chrome.action.setBadgeText({ text: '' });
     return;
   }
 
@@ -255,7 +266,6 @@ function handleBreakReminderEnd() {
   // No longer valid -> just cleanup.
   if (!isEnabled || !isInFlow || !currentTask || !breakReminderEnabled) {
     stopBreakReminder();
-    chrome.action.setBadgeText({ text: '' });
     return;
   }
 
@@ -281,7 +291,6 @@ function handleBreakReminderEnd() {
   });
 
   stopBreakReminder();
-  chrome.action.setBadgeText({ text: '' });
 
   showBreakReminderNotification();
 }
@@ -339,28 +348,35 @@ function showBreakReminderNotification() {
  * @returns {void}
  */
 function resetBreakReminder(data, sendResponse) {
-  try {
-    const task = typeof data?.task === 'string' ? data.task.trim() : '';
-    if (!task) {
-      sendResponse?.({ success: false, error: 'Missing task' });
-      return;
-    }
+  ensureInitialized()
+    .then(() => {
+      try {
+        const task = typeof data?.task === 'string' ? data.task.trim() : '';
+        if (!task) {
+          sendResponse?.({ success: false, error: 'Missing task' });
+          return;
+        }
 
-    console.log('🌸 Resetting break reminder timer with task:', task);
+        console.log('🌸 Resetting break reminder timer with task:', task);
 
-    updateState({
-      currentTask: task,
-      isInFlow: true,
-      breakReminderEnabled: true
+        updateState({
+          currentTask: task,
+          isInFlow: true,
+          breakReminderEnabled: true
+        });
+
+        startBreakReminder();
+
+        sendResponse?.({ success: true });
+      } catch (error) {
+        console.error('🌸🌸🌸 Error in resetBreakReminder:', error);
+        sendResponse?.({ success: false, error: error?.message || String(error) });
+      }
+    })
+    .catch((error) => {
+      console.error('🌸🌸🌸 Error ensuring state before resetBreakReminder:', error);
+      sendResponse?.({ success: false, error: error?.message || String(error) });
     });
-
-    startBreakReminder();
-
-    sendResponse?.({ success: true });
-  } catch (error) {
-    console.error('🌸🌸🌸 Error in resetBreakReminder:', error);
-    sendResponse?.({ success: false, error: error?.message || String(error) });
-  }
 }
 
 /**
@@ -369,44 +385,56 @@ function resetBreakReminder(data, sendResponse) {
  * @returns {void}
  */
 function getBreakReminderState(sendResponse) {
-  const {
-    breakReminderEnabled,
-    reminderStartTime,
-    reminderInterval,
-    reminderExpectedEndTime,
-    isEnabled,
-    isInFlow,
-    currentTask
-  } = getState();
+  ensureInitialized()
+    .then(() => {
+      const {
+        breakReminderEnabled,
+        reminderStartTime,
+        reminderInterval,
+        reminderExpectedEndTime,
+        isEnabled,
+        isInFlow,
+        currentTask
+      } = getState();
 
-  const isActive = !!(isEnabled && isInFlow && currentTask && breakReminderEnabled);
+      const isActive = !!(isEnabled && isInFlow && currentTask && breakReminderEnabled);
 
-  if (!isActive) {
-    sendResponse({
-      enabled: false,
-      startTime: null,
-      interval: BREAK_REMINDER_INTERVAL,
-      expectedEndTime: null
+      if (!isActive) {
+        sendResponse({
+          enabled: false,
+          startTime: null,
+          interval: BREAK_REMINDER_INTERVAL,
+          expectedEndTime: null
+        });
+        return;
+      }
+
+      if (!reminderStartTime || !reminderExpectedEndTime) {
+        startBreakReminder(reminderInterval || BREAK_REMINDER_INTERVAL);
+        const newState = getState();
+        sendResponse({
+          enabled: true,
+          startTime: newState.reminderStartTime,
+          interval: newState.reminderInterval || BREAK_REMINDER_INTERVAL,
+          expectedEndTime: newState.reminderExpectedEndTime
+        });
+        return;
+      }
+
+      sendResponse({
+        enabled: true,
+        startTime: reminderStartTime,
+        interval: reminderInterval || BREAK_REMINDER_INTERVAL,
+        expectedEndTime: reminderExpectedEndTime
+      });
+    })
+    .catch((error) => {
+      console.error('🌸🌸🌸 Error ensuring state before getBreakReminderState:', error);
+      sendResponse({
+        enabled: false,
+        startTime: null,
+        interval: BREAK_REMINDER_INTERVAL,
+        expectedEndTime: null
+      });
     });
-    return;
-  }
-
-  if (!reminderStartTime || !reminderExpectedEndTime) {
-    startBreakReminder(reminderInterval || BREAK_REMINDER_INTERVAL);
-    const newState = getState();
-    sendResponse({
-      enabled: true,
-      startTime: newState.reminderStartTime,
-      interval: newState.reminderInterval || BREAK_REMINDER_INTERVAL,
-      expectedEndTime: newState.reminderExpectedEndTime
-    });
-    return;
-  }
-
-  sendResponse({
-    enabled: true,
-    startTime: reminderStartTime,
-    interval: reminderInterval || BREAK_REMINDER_INTERVAL,
-    expectedEndTime: reminderExpectedEndTime
-  });
 }

@@ -58,7 +58,7 @@ function initializePopup() {
   // Listen for state updates from background script
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.action === messageActions.stateUpdated) {
-      handleStateUpdate(message.state);
+      handleStateUpdate(message.delta || message.state);
     }
   });
   
