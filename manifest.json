@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "MaiZone",
+  "version": "0.0.3",
+  "description": "MaiZone (🌸) - Do one thing at a time.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "webNavigation",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "commands": {
+    "test-break-reminder": {
+      "suggested_key": {
+        "default": "Alt+B"
+      },
+      "description": "Test break reminder notification"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "type": "module"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icon.png", "constants.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
