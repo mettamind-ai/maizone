@@ -72,16 +72,49 @@ function setupEventListeners() {
 /**
  * Handle keyboard commands
  */
-function handleCommand(command) {
+function showNotification(title, message) {
+  try {
+    if (!chrome?.notifications?.create) return;
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon.png',
+      title: typeof title === 'string' ? title : 'MaiZone',
+      message: typeof message === 'string' ? message : ''
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Handle keyboard commands
+ */
+async function handleCommand(command) {
   console.log('🌸 Command received:', command);
-  
+
+  // MV3 reliability: wake handlers should hydrate state (even if this handler doesn't always need it).
+  try {
+    await ensureInitialized();
+  } catch (error) {
+    // ignore (ClipMD/Break reminder can still run without state)
+  }
+
   if (command === 'test-break-reminder') {
     sendBreakReminder();
     console.log('🌸 Break reminder sent successfully');
-  } else if (command === 'clipmd-markdown') {
-    startClipmdMarkdownPicker().catch((error) => {
+    return;
+  }
+
+  if (command === 'clipmd-markdown') {
+    try {
+      const ok = await startClipmdMarkdownPicker();
+      if (!ok) {
+        showNotification('MaiZone', 'Không thể bật ClipMD trên tab này. Hãy mở trang http/https và thử lại nhé.');
+      }
+    } catch (error) {
       console.error('🌸🌸🌸 Error starting ClipMD:', error);
-    });
+      showNotification('MaiZone', 'ClipMD gặp lỗi khi khởi chạy. Thử reload trang và bấm Alt+Q lại nhé.');
+    }
   }
 }
 

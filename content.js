@@ -5,6 +5,7 @@
  * @feature f01 - Distraction Blocking (UI part)
  * @feature f04c - Deep Work Mode Integration
  * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
  */
 
 /******************************************************************************
@@ -67,6 +68,50 @@ async function sendMessageSafely(message, { timeoutMs = 2000 } = {}) {
 // Constants specific to content.js
 const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 
+// [f07] ChatGPT helpers (domain-scoped; safe no-op elsewhere).
+const CHATGPT_HOST_SUFFIX = 'chatgpt.com';
+const CHATGPT_ZEN_STORAGE_KEY = 'chatgptZenMode';
+const CHATGPT_ZEN_SELECTORS = Object.freeze(['.cursor-pointer', '#page-header', '#thread-bottom', '#full_editor']);
+const CHATGPT_SOLVIT_TEMPLATE = `You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You encourage the user to complete needed tasks themselves, unless the user explicitly asks for it to be done for them. Unless explicitly requested otherwise. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing.
+
+You should be concise, direct, and without unnecessary explanations or summaries. Additionally, avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand.
+
+
+You and users will work together using following principles:
+
+1. Build solutions incrementally in small steps.
+
+2. User want to understand each piece of content / code as we go, so please:
+   - Explain your reasoning for suggestions
+   - Point out important concepts and patterns
+   - Share relevant best practices or techniques
+
+3. Let's maintain context of ongoing dialogue to:
+   - Refine solutions iteratively
+   - Learn from what works and doesn't work
+   - Develop increasingly sophisticated solutions
+
+4. When suggesting content / code:
+   - Focus on concise, high-quality solutions
+   - Avoid unnecessary complexity
+   - Help user understand why certain approaches are chosen
+
+5. If user get stuck:
+   - Help break down problems into smaller solvable pieces
+   - Suggest alternative approaches
+   - Explain relevant concepts user might need to understand
+
+6. Always asking questions to check / clarify user understanding and what user want to do next in-order to choose the most appropriate next step.
+
+
+
+Before start, use will enter data to create the context, so please read them and response "OK" until user really ask a question.
+
+Các lệnh tắt cần ghi nhớ:
+
+- vx: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi
+- vd: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.`;
+
 // Message actions (prefer shared global injected via `actions_global.js`).
 const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   checkCurrentUrl: 'checkCurrentUrl',
@@ -85,6 +130,12 @@ let isExtensionEnabled = true;
 let isDistractionBlockingEnabled = true;
 let domListenersAttached = false;
 
+// [f07] ChatGPT helpers state
+let isChatgptZenModeEnabled = true;
+let chatgptZenObserver = null;
+let chatgptZenApplyTimeoutId = null;
+let chatgptToastTimeoutId = null;
+
 // YouTube SPA monitoring
 let youtubeObserver = null;
 let youtubeFallbackIntervalId = null;
@@ -101,9 +152,14 @@ function initialize() {
   console.log('🌸 Mai content script initialized');
 
   // Load state early so we can avoid unnecessary listeners work when disabled
-  chrome.storage.local.get(['isEnabled', 'blockDistractions'], ({ isEnabled, blockDistractions }) => {
+  chrome.storage.local.get(['isEnabled', 'blockDistractions', CHATGPT_ZEN_STORAGE_KEY], (result) => {
+    const { isEnabled, blockDistractions } = result || {};
     isExtensionEnabled = typeof isEnabled === 'boolean' ? isEnabled : true;
     isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
+
+    const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
+    isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : true;
+
     syncContentScriptActiveState();
   });
   
@@ -127,6 +183,12 @@ function initialize() {
         startYouTubeNavigationObserver();
         checkIfDistractingSite();
       }
+    }
+
+    if (changes[CHATGPT_ZEN_STORAGE_KEY]) {
+      const nextValue = changes[CHATGPT_ZEN_STORAGE_KEY]?.newValue;
+      isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : true;
+      syncChatgptHelperActiveState();
     }
 
     if (changes.isInFlow) {
@@ -179,6 +241,11 @@ function resetTransientState() {
 
   stopYouTubeNavigationObserver();
   document.getElementById('mai-distraction-warning')?.remove?.();
+
+  // [f07] Always clean up DOM changes when extension turns off.
+  stopChatgptZenObserver();
+  restoreAllChatgptZenHiddenElements();
+  removeChatgptToast();
 }
 
 /**
@@ -200,6 +267,7 @@ function syncContentScriptActiveState() {
     stopYouTubeNavigationObserver();
   }
 
+  syncChatgptHelperActiveState();
   checkIfDistractingSite();
 }
 
@@ -280,6 +348,8 @@ function handleTypingEvent(event) {
  * Handle keydown events
  */
 function handleKeyDown(event) {
+  if (handleChatgptHotkeys(event)) return;
+  if (handleClipmdHotkey(event)) return;
   handleTypingEvent(event);
 }
 
@@ -288,6 +358,402 @@ function handleKeyDown(event) {
  */
 function handleKeyUp(event) {
   handleTypingEvent(event);
+}
+
+/******************************************************************************
+ * CLIPMD HOTKEY (IN-PAGE FALLBACK) [f06]
+ ******************************************************************************/
+
+/**
+ * Fallback hotkey handler for ClipMD when Chrome shortcuts are not configured.
+ * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @param {KeyboardEvent} event - Keyboard event
+ * @returns {boolean} True if handled
+ */
+function handleClipmdHotkey(event) {
+  if (!isExtensionEnabled) return false;
+  if (!event?.isTrusted) return false;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  if (event.shiftKey) return false;
+  if (event.repeat) return false;
+
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+  if (key !== 'q') return false;
+
+  startClipmdPickMode();
+  event.preventDefault?.();
+  event.stopPropagation?.();
+  return true;
+}
+
+/******************************************************************************
+ * CHATGPT ZEN HOTKEYS (chatgpt.com) [f07]
+ ******************************************************************************/
+
+/**
+ * Check whether current page is chatgpt.com (or subdomain).
+ * @returns {boolean}
+ */
+function isChatgptHost() {
+  const host = (window.location?.hostname || '').toLowerCase();
+  return host === CHATGPT_HOST_SUFFIX || host.endsWith(`.${CHATGPT_HOST_SUFFIX}`);
+}
+
+/**
+ * Sync ChatGPT helper effects with current enabled state.
+ * @returns {void}
+ */
+function syncChatgptHelperActiveState() {
+  if (!isChatgptHost()) return;
+
+  if (!isExtensionEnabled) {
+    stopChatgptZenObserver();
+    restoreAllChatgptZenHiddenElements();
+    return;
+  }
+
+  if (isChatgptZenModeEnabled) {
+    applyChatgptZenMode(true, { scope: 'all' });
+    startChatgptZenObserver();
+    return;
+  }
+
+  stopChatgptZenObserver();
+  restoreAllChatgptZenHiddenElements();
+}
+
+/**
+ * Handle ChatGPT-only hotkeys.
+ * - Alt+Z: toggle "Zen" (hide/show selected UI blocks)
+ * - Alt+S: paste a prompt template into the current editor
+ * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
+ * @param {KeyboardEvent} event - Keyboard event
+ * @returns {boolean} True if handled
+ */
+function handleChatgptHotkeys(event) {
+  if (!isExtensionEnabled) return false;
+  if (!isChatgptHost()) return false;
+  if (!event?.isTrusted) return false;
+  if (!event.altKey || event.ctrlKey || event.metaKey) return false;
+  if (event.shiftKey) return false;
+  if (event.repeat) return false;
+
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+
+  if (key === 'z') {
+    toggleChatgptZenMode();
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
+  if (key === 's') {
+    const ok = pasteChatgptTemplate();
+    if (!ok) showChatgptToast('🌸 Không tìm thấy ô để dán. Click vào ô nhập trước nhé.');
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Toggle Zen mode and persist to storage.
+ * @returns {void}
+ */
+function toggleChatgptZenMode() {
+  isChatgptZenModeEnabled = !isChatgptZenModeEnabled;
+  syncChatgptHelperActiveState();
+
+  try {
+    chrome.storage.local.set({ [CHATGPT_ZEN_STORAGE_KEY]: isChatgptZenModeEnabled });
+  } catch {
+    // ignore (context may be invalidated)
+  }
+
+  showChatgptToast(isChatgptZenModeEnabled ? '🌸 Zen mode: ON (Alt+Z để tắt)' : '🌸 Zen mode: OFF (Alt+Z để bật)');
+}
+
+/**
+ * Apply or restore Zen mode for known selectors.
+ * @param {boolean} enable - True to hide, false to restore
+ * @param {Object} [options]
+ * @param {'all'|'observed'} [options.scope='all'] - Apply to all selectors or only "stable" observed selectors
+ * @returns {void}
+ */
+function applyChatgptZenMode(enable, { scope = 'all' } = {}) {
+  const selectors =
+    scope === 'observed' ? CHATGPT_ZEN_SELECTORS.filter((s) => typeof s === 'string' && s.trim().startsWith('#')) : CHATGPT_ZEN_SELECTORS;
+
+  if (!enable) {
+    restoreAllChatgptZenHiddenElements();
+    return;
+  }
+
+  selectors.forEach((selector) => {
+    if (typeof selector !== 'string') return;
+    const el = document.querySelector(selector);
+    if (!el) return;
+    hideElementForZen(el);
+  });
+}
+
+/**
+ * Hide an element and remember its previous inline display.
+ * @param {Element} el - DOM element
+ * @returns {void}
+ */
+function hideElementForZen(el) {
+  if (!el || !(el instanceof HTMLElement)) return;
+  if (el.dataset?.maizoneZenHidden === '1') return;
+
+  const prevDisplay = el.style.display;
+  const prevPriority = el.style.getPropertyPriority?.('display') || '';
+
+  el.dataset.maizoneZenHidden = '1';
+  el.dataset.maizoneZenPrevDisplay = prevDisplay;
+  el.dataset.maizoneZenPrevDisplayPriority = prevPriority;
+
+  try {
+    el.style.setProperty('display', 'none', 'important');
+  } catch {
+    el.style.display = 'none';
+  }
+}
+
+/**
+ * Restore all elements hidden by Zen mode.
+ * @returns {void}
+ */
+function restoreAllChatgptZenHiddenElements() {
+  try {
+    const hiddenEls = document.querySelectorAll('[data-maizone-zen-hidden="1"]');
+    hiddenEls.forEach((el) => restoreElementFromZen(el));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Restore a single element that was hidden by Zen mode.
+ * @param {Element} el - DOM element
+ * @returns {void}
+ */
+function restoreElementFromZen(el) {
+  if (!el || !(el instanceof HTMLElement)) return;
+  if (el.dataset?.maizoneZenHidden !== '1') return;
+
+  const prevDisplay = typeof el.dataset.maizoneZenPrevDisplay === 'string' ? el.dataset.maizoneZenPrevDisplay : '';
+  const prevPriority = typeof el.dataset.maizoneZenPrevDisplayPriority === 'string' ? el.dataset.maizoneZenPrevDisplayPriority : '';
+
+  if (prevDisplay) {
+    try {
+      el.style.setProperty('display', prevDisplay, prevPriority || '');
+    } catch {
+      el.style.display = prevDisplay;
+    }
+  } else {
+    try {
+      el.style.removeProperty('display');
+    } catch {
+      el.style.display = '';
+    }
+  }
+
+  delete el.dataset.maizoneZenHidden;
+  delete el.dataset.maizoneZenPrevDisplay;
+  delete el.dataset.maizoneZenPrevDisplayPriority;
+}
+
+/**
+ * Start a lightweight observer to re-apply Zen for stable selectors on SPA DOM changes.
+ * NOTE: Only re-applies ID selectors to avoid creeping hides on broad class selectors.
+ * @returns {void}
+ */
+function startChatgptZenObserver() {
+  if (!isChatgptHost()) return;
+  if (!isChatgptZenModeEnabled) return;
+  if (chatgptZenObserver) return;
+
+  const root = document.documentElement;
+  if (!root) return;
+
+  chatgptZenObserver = new MutationObserver(() => scheduleChatgptZenObservedApply());
+  chatgptZenObserver.observe(root, { childList: true, subtree: true });
+}
+
+/**
+ * Stop Zen observer.
+ * @returns {void}
+ */
+function stopChatgptZenObserver() {
+  try {
+    chatgptZenObserver?.disconnect?.();
+  } catch {
+    // ignore
+  }
+  chatgptZenObserver = null;
+
+  clearTimeout(chatgptZenApplyTimeoutId);
+  chatgptZenApplyTimeoutId = null;
+}
+
+/**
+ * Debounce observed Zen re-apply to keep overhead low on streaming UIs.
+ * @returns {void}
+ */
+function scheduleChatgptZenObservedApply() {
+  if (!isChatgptHost()) return;
+  if (!isChatgptZenModeEnabled) return;
+  if (chatgptZenApplyTimeoutId) return;
+
+  chatgptZenApplyTimeoutId = setTimeout(() => {
+    chatgptZenApplyTimeoutId = null;
+    applyChatgptZenMode(true, { scope: 'observed' });
+  }, 180);
+}
+
+/**
+ * Paste the prompt template into the active editor (or ChatGPT composer as fallback).
+ * @returns {boolean} True if paste succeeded
+ */
+function pasteChatgptTemplate() {
+  const active = document.activeElement;
+  if (setEditableText(active, CHATGPT_SOLVIT_TEMPLATE)) {
+    showChatgptToast('🌸 Đã dán prompt mẫu (Alt+S).');
+    return true;
+  }
+
+  const fallback = findChatgptComposerElement();
+  if (fallback && setEditableText(fallback, CHATGPT_SOLVIT_TEMPLATE)) {
+    showChatgptToast('🌸 Đã dán prompt mẫu (Alt+S).');
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Attempt to locate ChatGPT composer textarea for convenience.
+ * @returns {HTMLElement|null}
+ */
+function findChatgptComposerElement() {
+  const candidates = [
+    'textarea#prompt-textarea',
+    'textarea[name="prompt"]',
+    'form textarea',
+    'textarea'
+  ];
+
+  for (const selector of candidates) {
+    const el = document.querySelector(selector);
+    if (!el || !(el instanceof HTMLElement)) continue;
+    if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) continue; // hidden
+    return el;
+  }
+
+  return null;
+}
+
+/**
+ * Set text for an editable element and dispatch input events so React/Vue can detect changes.
+ * @param {Element|null} el - Target element
+ * @param {string} text - Text to set
+ * @returns {boolean} True if updated
+ */
+function setEditableText(el, text) {
+  if (!el || !(el instanceof HTMLElement)) return false;
+  const nextText = typeof text === 'string' ? text : '';
+
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag === 'input') {
+    const inputType = (el.getAttribute('type') || 'text').toLowerCase();
+    if (inputType === 'password') return false;
+    el.focus?.();
+    el.value = nextText;
+    el.dispatchEvent?.(new Event('input', { bubbles: true }));
+    el.dispatchEvent?.(new Event('change', { bubbles: true }));
+    try {
+      el.setSelectionRange?.(nextText.length, nextText.length);
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  if (tag === 'textarea') {
+    el.focus?.();
+    el.value = nextText;
+    el.dispatchEvent?.(new Event('input', { bubbles: true }));
+    el.dispatchEvent?.(new Event('change', { bubbles: true }));
+    try {
+      el.setSelectionRange?.(nextText.length, nextText.length);
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
+  if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+    el.focus?.();
+    el.textContent = nextText;
+    el.dispatchEvent?.(new Event('input', { bubbles: true }));
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Show a minimal toast on ChatGPT to confirm actions.
+ * @param {string} text - Toast text
+ * @returns {void}
+ */
+function showChatgptToast(text) {
+  if (!isChatgptHost()) return;
+  const message = typeof text === 'string' ? text : '';
+  if (!message) return;
+
+  let el = document.getElementById('mai-chatgpt-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mai-chatgpt-toast';
+    Object.assign(el.style, {
+      position: 'fixed',
+      left: '50%',
+      bottom: '18px',
+      transform: 'translateX(-50%)',
+      zIndex: '99999999',
+      maxWidth: '92vw',
+      padding: '10px 12px',
+      borderRadius: '12px',
+      backgroundColor: 'rgba(0,0,0,0.85)',
+      color: 'white',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontSize: '13px',
+      lineHeight: '1.25',
+      boxShadow: '0 6px 18px rgba(0,0,0,0.28)'
+    });
+    document.documentElement.appendChild(el);
+  }
+
+  el.textContent = message;
+
+  clearTimeout(chatgptToastTimeoutId);
+  chatgptToastTimeoutId = setTimeout(() => {
+    removeChatgptToast();
+  }, 1200);
+}
+
+/**
+ * Remove ChatGPT toast (if any).
+ * @returns {void}
+ */
+function removeChatgptToast() {
+  clearTimeout(chatgptToastTimeoutId);
+  chatgptToastTimeoutId = null;
+  document.getElementById('mai-chatgpt-toast')?.remove?.();
 }
 
 /******************************************************************************

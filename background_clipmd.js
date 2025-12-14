@@ -5,6 +5,18 @@
  */
 
 import { messageActions } from './actions.js';
+import { sendMessageToTabSafely } from './messaging.js';
+
+/***** HELPERS *****/
+
+/**
+ * Sleep helper.
+ * @param {number} ms - Milliseconds
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /***** OFFSCREEN CONVERSION *****/
 
@@ -76,13 +88,20 @@ export async function startClipmdMarkdownPicker() {
     if (typeof tabId !== 'number') return false;
     if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
 
-    await new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, { action: messageActions.clipmdStart, data: { mode: 'markdown' } }, () => {
-        resolve();
-      });
-    });
+    // Retry: the content script may not be ready yet (run_at=document_idle).
+    const maxAttempts = 6;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const reply = await sendMessageToTabSafely(
+        tabId,
+        { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'command', attempt } },
+        { timeoutMs: 900 }
+      );
 
-    return true;
+      if (reply?.received) return true;
+      await sleep(250 + attempt * 200);
+    }
+
+    return false;
   } catch (error) {
     console.error('🌸🌸🌸 Error starting ClipMD picker:', error);
     return false;
@@ -128,4 +147,3 @@ export function initClipmd() {
     return true;
   });
 }
-
