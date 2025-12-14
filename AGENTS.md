@@ -120,3 +120,12 @@
 - JS syntax check:
   - ESM files: `node --input-type=module --check < file.js`
   - Content script (classic): `node --check content.js`
+
+- Unit tests (no deps/bundler):
+  - `npm test` (preferred)
+  - `node --test` (equivalent)
+
+- Smoke test (manual):
+  - Bật **Kích hoạt Mai** + **Chặn trang web gây sao nhãng**
+  - Mở `https://facebook.com` (hoặc site trong `distractingSites`) và kiểm tra overlay cảnh báo
+  - MV3 cold start: vào `chrome://extensions` → “Inspect views / Service worker” → **Stop** service worker, rồi mở lại `https://facebook.com` để chắc chắn SW wake + chặn vẫn hoạt động
