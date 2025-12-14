@@ -93,10 +93,10 @@ sendMessageToTabSafely(tabId, {
 ## Huy hiệu thời gian (f03/f04) — mm:ss trên icon
 
 - **Vì sao cần?** MV3 Service Worker có thể ngủ; không nên chạy `setInterval` mỗi 1 giây trong SW vì sẽ wake liên tục (tốn pin/CPU).
-- **Cách làm**: Dùng `chrome.alarms` để hẹn giờ kết thúc (end alarm) và tick badge (best-effort; có thể bị throttle/clamp tuỳ trình duyệt).
+- **Cách làm**: Dùng `chrome.alarms` để hẹn giờ kết thúc (end alarm) và tick badge (fallback có thể wake SW mỗi giây, tuỳ trình duyệt).
 - **High-precision (mỗi giây)**: Khi đang Deep Work, Mai tận dụng `chrome.offscreen` (cùng offscreen với ClipMD) để tick badge mỗi 1 giây; ticker tự dừng khi Deep Work kết thúc.
 - **Triển khai**: `background_breakReminder.js` đảm bảo offscreen doc tồn tại; `clipmd_offscreen.js` đọc state từ `chrome.storage.local` và cập nhật badge (không log nội dung task).
-- **Vì sao có thể không mượt 1s?** Không có `offscreen` thì cần wake MV3 service worker theo lịch (`chrome.alarms`), nên độ mượt phụ thuộc vào trình duyệt.
+- **Vì sao có thể tốn pin/không mượt?** Không có `offscreen` thì muốn badge nhảy từng giây phải wake MV3 service worker theo `chrome.alarms`, nên có thể bị throttle/clamp tuỳ trình duyệt.
 
 ## Tổng Quan Kiến Trúc
 

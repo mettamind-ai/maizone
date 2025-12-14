@@ -246,12 +246,24 @@ async function scheduleBreakReminderAlarms(expectedEndTime) {
  */
 function scheduleNextBadgeTickAlarm() {
   try {
-    const { breakReminderEnabled, isInFlow, currentTask, reminderExpectedEndTime } = getState();
+    const { breakReminderEnabled, isInFlow, currentTask, reminderExpectedEndTime, reminderStartTime, reminderInterval } = getState();
     if (!breakReminderEnabled || !isInFlow || !currentTask) return;
 
     // Stop ticking after the expected end time.
+    let expectedEndTime = null;
     if (typeof reminderExpectedEndTime === 'number' && Number.isFinite(reminderExpectedEndTime)) {
-      if (Date.now() >= reminderExpectedEndTime) return;
+      expectedEndTime = reminderExpectedEndTime;
+    } else if (
+      typeof reminderStartTime === 'number' &&
+      Number.isFinite(reminderStartTime) &&
+      typeof reminderInterval === 'number' &&
+      Number.isFinite(reminderInterval)
+    ) {
+      expectedEndTime = reminderStartTime + reminderInterval;
+    }
+
+    if (typeof expectedEndTime === 'number' && Number.isFinite(expectedEndTime)) {
+      if (Date.now() >= expectedEndTime) return;
     }
 
     chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { when: Date.now() + BADGE_TICK_INTERVAL_MS });
