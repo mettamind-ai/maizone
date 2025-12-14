@@ -50,7 +50,7 @@
   - Describe parameters, return values, and side effects
   - Document security considerations and limitations
 - **Feature Tagging System**
-  - Always maintain Feature Tag Indexing in README.md
+  - Always maintain `FIT` (Feature Indexing Table) in README.md
   - Tag files and functions using: `@feature f01 - Feature Name` 
   - For multi-feature files/functions, include all relevant tags
   - Update feature tables when adding/modifying functionality
