@@ -216,10 +216,7 @@ async function startClipmdMarkdownPickerViaDebugger(tabId) {
   try {
     if (!chrome?.debugger?.attach || !chrome?.debugger?.sendCommand) return false;
     if (typeof tabId !== 'number') return false;
-    if (clipmdSessions.has(tabId)) {
-      await cleanupClipmdSession(tabId);
-      return true;
-    }
+    if (clipmdSessions.has(tabId)) return true;
 
     const ready = await ensureClipmdOffscreen();
     if (!ready) return false;

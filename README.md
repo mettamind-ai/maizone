@@ -95,5 +95,4 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 ## ClipMD (Copy Markdown)
 
 - Bấm **Alt + Q** để bật chế độ chọn vùng (inspect overlay), sau đó **click vào element** bạn muốn copy → Mai sẽ copy Markdown vào clipboard.
-- Bấm **Alt + Q** lần nữa để tắt/hủy chế độ chọn.
 - Hoặc **click icon MaiZone (🌸)** để mở popup, đồng thời Mai cũng tự bật ClipMD cho tab hiện tại → rồi **click vào element** để copy.
