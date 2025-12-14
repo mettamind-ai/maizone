@@ -8,6 +8,8 @@ import { messageActions } from './actions.js';
 import { DEFAULT_STATE, computeNextState, diffState, getDefaultState, sanitizeStoredState } from './state_core.js';
 import { STATE_KEYS, UI_ALLOWED_UPDATE_KEYS, UNTRUSTED_STATE_KEYS } from './state_contract.js';
 
+const UI_ALLOWED_UPDATE_KEYS_SET = new Set(UI_ALLOWED_UPDATE_KEYS);
+
 // In-memory state snapshot (hydrated lazily for MV3 reliability).
 let state = getDefaultState();
 
@@ -57,6 +59,52 @@ function notifyStateDeltaSubscribers(nextState, delta) {
 let hasRegisteredStorageReconcile = false;
 
 /**
+ * Compare two arrays of strings by value.
+ * @param {any} a - Array A
+ * @param {any} b - Array B
+ * @returns {boolean}
+ */
+function areStringArraysEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Compare state values by value (supports primitives + string arrays).
+ * @param {any} a - Value A
+ * @param {any} b - Value B
+ * @returns {boolean}
+ */
+function areStateValuesEqual(a, b) {
+  const aIsArray = Array.isArray(a);
+  const bIsArray = Array.isArray(b);
+  if (aIsArray || bIsArray) return areStringArraysEqual(a, b);
+  return a === b;
+}
+
+/**
+ * Create a safe state summary for logs (privacy-first: avoid task/sites details).
+ * @param {Object} s - State object
+ * @returns {Object}
+ */
+function summarizeStateForLog(s) {
+  const stateObj = s && typeof s === 'object' ? s : state;
+  return {
+    isEnabled: !!stateObj.isEnabled,
+    blockDistractions: !!stateObj.blockDistractions,
+    isInFlow: !!stateObj.isInFlow,
+    breakReminderEnabled: !!stateObj.breakReminderEnabled,
+    distractingSitesCount: Array.isArray(stateObj.distractingSites) ? stateObj.distractingSites.length : 0,
+    deepWorkBlockedSitesCount: Array.isArray(stateObj.deepWorkBlockedSites) ? stateObj.deepWorkBlockedSites.length : 0,
+    hasTask: !!(stateObj.currentTask && String(stateObj.currentTask).trim())
+  };
+}
+
+/**
  * Broadcast a state delta safely (guard Promise support across environments).
  * @param {Object} delta - Partial state delta
  * @returns {void}
@@ -99,11 +147,16 @@ function setupStorageReconcileListener() {
 
     const rawUpdates = {};
     Object.entries(changes).forEach(([key, change]) => {
-      if (!(key in DEFAULT_STATE)) return;
+      // Only reconcile keys that UI fallback is allowed to write.
+      if (!UI_ALLOWED_UPDATE_KEYS_SET.has(key)) return;
       rawUpdates[key] = change?.newValue;
     });
 
     if (!Object.keys(rawUpdates).length) return;
+
+    // If storage change matches our current in-memory state, skip to avoid queue amplification.
+    const matchesCurrentState = Object.entries(rawUpdates).every(([key, value]) => areStateValuesEqual(state[key], value));
+    if (matchesCurrentState) return;
 
     updateChain = updateChain
       .then(async () => {
@@ -116,8 +169,19 @@ function setupStorageReconcileListener() {
 
         state = nextState;
 
-        // Persist any derived/sanitized changes so storage stays canonical/consistent.
-        await new Promise((resolve) => chrome.storage.local.set(delta, () => resolve()));
+        // Persist only derived/canonical differences (avoid rewriting the same rawUpdates again).
+        const deltaToPersist = {};
+        Object.entries(delta).forEach(([key, value]) => {
+          if (!(key in rawUpdates)) {
+            deltaToPersist[key] = value;
+            return;
+          }
+          if (!areStateValuesEqual(rawUpdates[key], value)) deltaToPersist[key] = value;
+        });
+
+        if (Object.keys(deltaToPersist).length) {
+          await new Promise((resolve) => chrome.storage.local.set(deltaToPersist, () => resolve()));
+        }
 
         notifyStateDeltaSubscribers(state, delta);
         broadcastStateDelta(delta);
@@ -159,8 +223,6 @@ function filterPayloadKeys(payload, allowedKeys) {
   return filtered;
 }
 
-const UI_ALLOWED_UPDATE_KEYS_SET = new Set(UI_ALLOWED_UPDATE_KEYS);
-
 /**
  * Ensure state is hydrated before any logic relies on it (MV3 init race safe).
  * @feature f05 - State Management
@@ -200,7 +262,7 @@ export function ensureInitialized() {
       state = nextState;
       hasInitialized = true;
 
-      console.log('🌸 State hydrated:', state);
+      console.log('🌸 State hydrated:', summarizeStateForLog(state));
       setupStorageReconcileListener();
       return { ...state };
     } catch (error) {

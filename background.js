@@ -13,6 +13,21 @@ import { initBreakReminder, sendBreakReminder } from './background_breakReminder
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
+ * Summarize state for logs (privacy-first).
+ * @param {Object} state - Full state object
+ * @returns {Object}
+ */
+function summarizeStateForLog(state) {
+  const s = state && typeof state === 'object' ? state : {};
+  return {
+    isEnabled: !!s.isEnabled,
+    blockDistractions: !!s.blockDistractions,
+    isInFlow: !!s.isInFlow,
+    breakReminderEnabled: !!s.breakReminderEnabled
+  };
+}
+
+/**
  * Initialize background script
  */
 function initBackgroundScript() {
@@ -31,7 +46,7 @@ function initBackgroundScript() {
     
     // Hydrate state after listeners are ready (safe with MV3 service worker lifecycle).
     ensureInitialized()
-      .then((state) => console.info('🌸 State ready:', state))
+      .then((state) => console.info('🌸 State ready:', summarizeStateForLog(state)))
       .catch((error) => console.error('🌸🌸🌸 Error hydrating state:', error));
 
     console.info('🌸 Mai background script loaded successfully');

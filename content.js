@@ -524,7 +524,8 @@ function setupWarningButtons(warningDiv) {
     warningDiv.remove();
   });
 
-  backBtn?.addEventListener('click', () => {
+  backBtn?.addEventListener('click', (event) => {
+    if (!event?.isTrusted) return;
     clearInterval(countdownInterval);
     warningDiv.remove();
     sendMessageSafely({ action: messageActions.closeTab });

@@ -16,6 +16,21 @@ const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
 
 let unsubscribeStateDelta = null;
 
+/***** TRUSTED SENDER (DEFENSE-IN-DEPTH) *****/
+
+/**
+ * Check whether the message sender is a trusted UI extension page (popup/options).
+ * @param {chrome.runtime.MessageSender} sender - Sender info
+ * @returns {boolean}
+ */
+function isTrustedUiSender(sender) {
+  if (!sender || sender.id !== chrome.runtime.id) return false;
+  // Content scripts provide sender.tab; extension pages do not.
+  if (sender.tab) return false;
+  const senderUrl = typeof sender.url === 'string' ? sender.url : '';
+  return senderUrl.startsWith(`chrome-extension://${chrome.runtime.id}/`);
+}
+
 /***** INITIALIZATION *****/
 
 /**
@@ -58,11 +73,24 @@ function setupMessageListeners() {
     if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
 
     if (message.action === messageActions.resetBreakReminder) {
+      if (!isTrustedUiSender(sender)) {
+        sendResponse?.({ success: false, error: 'Forbidden' });
+        return true;
+      }
       resetBreakReminder(message.data, sendResponse);
       return true;
     }
 
     if (message.action === messageActions.getBreakReminderState) {
+      if (!isTrustedUiSender(sender)) {
+        sendResponse?.({
+          enabled: false,
+          startTime: null,
+          interval: BREAK_REMINDER_INTERVAL,
+          expectedEndTime: null
+        });
+        return true;
+      }
       getBreakReminderState(sendResponse);
       return true;
     }
