@@ -291,13 +291,13 @@ function updateBadgeWithTimerDisplay() {
 
   const remainingMs = expectedEndTime - Date.now();
   if (remainingMs <= 0) {
-    chrome.action.setBadgeText({ text: '00' });
+    chrome.action.setBadgeText({ text: '00:00' });
     return;
   }
 
-  // MV3 badge tick runs by minute; keep badge consistent by showing minutes only.
+  // MV3 badge tick runs by minute; show mm:ss (seconds always "00") for clarity.
   const remainingMinutes = Math.ceil(remainingMs / 60000);
-  chrome.action.setBadgeText({ text: String(remainingMinutes).padStart(2, '0') });
+  chrome.action.setBadgeText({ text: `${String(remainingMinutes).padStart(2, '0')}:00` });
 }
 
 /**
