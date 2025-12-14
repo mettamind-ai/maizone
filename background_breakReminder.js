@@ -208,21 +208,21 @@ async function handleAlarm(alarm) {
  * @returns {Promise<boolean>} True if high-precision badge is handled by offscreen
  */
 async function scheduleBreakReminderAlarms(expectedEndTime) {
-  if (!chrome?.alarms) return;
-  if (typeof expectedEndTime !== 'number' || !Number.isFinite(expectedEndTime)) return;
+  if (!chrome?.alarms) return false;
+  if (typeof expectedEndTime !== 'number' || !Number.isFinite(expectedEndTime)) return false;
 
   try {
     chrome.alarms.create(BREAK_REMINDER_END_ALARM, { when: expectedEndTime });
 
     const hasOffscreen = await ensureOffscreenDocument();
+    // Always keep a low-frequency badge alarm as a fallback:
+    // some Chromium forks may throttle/limit offscreen, but alarms should still wake the SW.
+    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+
     if (hasOffscreen) {
       // Offscreen can tick badge every second without waking the SW constantly.
-      chrome.alarms.clear(BREAK_REMINDER_BADGE_ALARM);
       return true;
     }
-
-    // Fallback: keep badge roughly in sync without relying on long-lived timers.
-    chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
   } catch (error) {
     console.error('🌸🌸🌸 Error scheduling break reminder alarms:', error);
   }
@@ -299,8 +299,8 @@ async function initializeBreakReminderIfEnabled() {
     }
   }
 
-  const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(expectedEndTimeForAlarms);
-  if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
+  await scheduleBreakReminderAlarms(expectedEndTimeForAlarms);
+  updateBadgeWithTimerDisplay();
 }
 
 /**
@@ -366,8 +366,8 @@ async function startBreakReminder(customInterval) {
     reminderExpectedEndTime
   });
 
-  const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
-  if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
+  await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+  updateBadgeWithTimerDisplay();
 }
 
 /**
@@ -390,8 +390,8 @@ async function handleBreakReminderEnd() {
     now < reminderExpectedEndTime
   ) {
     // Alarm can fire early/late; reschedule if early.
-    const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
-    if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
+    await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+    updateBadgeWithTimerDisplay();
     return;
   }
 
@@ -488,8 +488,8 @@ function resetBreakReminder(data, sendResponse) {
           reminderExpectedEndTime
         });
 
-        const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
-        if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
+        await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+        updateBadgeWithTimerDisplay();
 
         sendResponse?.({ success: true });
       } catch (error) {

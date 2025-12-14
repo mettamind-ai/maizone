@@ -72,7 +72,7 @@ const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 const CHATGPT_HOST_SUFFIX = 'chatgpt.com';
 const CHATGPT_ZEN_STORAGE_KEY = 'chatgptZenMode';
 const CHATGPT_ZEN_SELECTORS = Object.freeze(['.cursor-pointer', '#page-header', '#thread-bottom', '#full_editor']);
-const CHATGPT_SOLVIT_TEMPLATE = `You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You encourage the user to complete needed tasks themselves, unless the user explicitly asks for it to be done for them. Unless explicitly requested otherwise. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing.
+const CHATGPT_TEMPLATE = `You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You encourage the user to complete needed tasks themselves, unless the user explicitly asks for it to be done for them. Unless explicitly requested otherwise. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing.
 
 You should be concise, direct, and without unnecessary explanations or summaries. Additionally, avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand.
 
@@ -631,13 +631,13 @@ function scheduleChatgptZenObservedApply() {
  */
 function pasteChatgptTemplate() {
   const active = document.activeElement;
-  if (setEditableText(active, CHATGPT_SOLVIT_TEMPLATE)) {
+  if (setEditableText(active, CHATGPT_TEMPLATE)) {
     showChatgptToast('🌸 Đã dán prompt mẫu (Alt+S).');
     return true;
   }
 
   const fallback = findChatgptComposerElement();
-  if (fallback && setEditableText(fallback, CHATGPT_SOLVIT_TEMPLATE)) {
+  if (fallback && setEditableText(fallback, CHATGPT_TEMPLATE)) {
     showChatgptToast('🌸 Đã dán prompt mẫu (Alt+S).');
     return true;
   }
