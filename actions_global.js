@@ -1,0 +1,21 @@
+/**
+ * MaiZone Browser Extension
+ * Message Actions (Classic): Global action names for classic scripts (content scripts)
+ * @feature f05 - State Management
+ */
+
+/***** ACTION NAMES (GLOBAL) *****/
+
+// Keep this list aligned with `actions.js` (ESM) to avoid string drift across contexts.
+globalThis.MAIZONE_ACTIONS = Object.freeze({
+  checkCurrentUrl: 'checkCurrentUrl',
+  youtubeNavigation: 'youtubeNavigation',
+  closeTab: 'closeTab',
+  distractingWebsite: 'distractingWebsite',
+  resetBreakReminder: 'resetBreakReminder',
+  getBreakReminderState: 'getBreakReminderState',
+  getState: 'getState',
+  updateState: 'updateState',
+  stateUpdated: 'stateUpdated'
+});
+

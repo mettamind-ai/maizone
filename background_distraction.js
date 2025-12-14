@@ -15,6 +15,21 @@ const WARNING_COOLDOWN_MS = 4000;
 const lastWarningByTabId = new Map();
 
 /**
+ * Convert URL to a safe hostname for logs (privacy-first).
+ * @param {string} url - Full URL
+ * @returns {string} Normalized hostname or empty string
+ */
+function getHostnameForLog(url) {
+  try {
+    if (typeof url !== 'string') return '';
+    const { hostname } = new URL(url);
+    return hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Cleanup debounce entries when tabs close/replace (prevent memory leak).
  * @returns {void}
  */
@@ -272,10 +287,11 @@ async function handleWebNavigation(details) {
     return;
   }
 
-  console.log(`🌸 Navigation detected: ${details.url}`);
+  const hostForLog = getHostnameForLog(details.url);
+  console.log(`🌸 Navigation detected: ${hostForLog || 'unknown'}`);
   const isDistracting = await isDistractingWebsite(details.url);
   if (isDistracting) {
-    console.log(`🌸 Navigation to distracting site detected: ${details.url}`);
+    console.log(`🌸 Navigation to distracting site detected: ${hostForLog || 'unknown'}`);
     sendWarningToTab(details.tabId, details.url);
   }
 }
@@ -296,7 +312,7 @@ function sendWarningToTab(tabId, url) {
       return normalized === s || normalized.endsWith('.' + s);
     });
 
-    console.log(`🌸 Sending warning for ${url}. Deep work: ${isInFlow}, Is messaging site: ${isDeepWorkBlocked}`);
+    console.log(`🌸 Sending warning. Host: ${normalized}. Deep work: ${isInFlow}, Is messaging site: ${isDeepWorkBlocked}`);
 
     const modeKey = isInFlow ? (isDeepWorkBlocked ? 'deepWorkBlocked' : 'deepWork') : 'normal';
     if (!shouldSendWarning(tabId, url, modeKey)) return;
@@ -335,14 +351,14 @@ async function onCheckCurrentUrl(data, tab, sendResponse) {
 
   await ensureInitialized();
   
-  console.log('🌸 Checking URL for distractions:', data.url);
+  console.log('🌸 Checking URL for distractions:', getHostnameForLog(data.url) || 'unknown');
   
   // Check if URL is distracting
   const isDistracting = await isDistractingWebsite(data.url);
   console.log('🌸 URL check result:', isDistracting);
   
   if (isDistracting && tab?.id) {
-    console.log('🌸 Sending warning for URL:', data.url);
+    console.log('🌸 Sending warning for URL:', getHostnameForLog(data.url) || 'unknown');
     sendWarningToTab(tab.id, data.url);
   }
   
@@ -354,7 +370,7 @@ async function onCheckCurrentUrl(data, tab, sendResponse) {
  */
 function onYouTubeNavigation(data, tab, sendResponse) {
   if (data?.url && tab?.id) {
-    console.debug('🌸 YouTube navigation detected:', data.url);
+    console.debug('🌸 YouTube navigation detected:', getHostnameForLog(data.url) || 'unknown');
     const details = { url: data.url, frameId: 0, tabId: tab.id };
     handleWebNavigation(details);
   }

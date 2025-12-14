@@ -14,6 +14,7 @@
   - `state_contract.js`: allowlists/contract cho get/update state giữa UI/background/content
   - `state_helpers.js`: UI get/update state (message first, fallback storage **đã sanitize**)
   - `actions.js`: `messageActions` constants (không hardcode string rải rác)
+  - `actions_global.js`: `MAIZONE_ACTIONS` (classic) cho `content.js` để tránh drift string actions
   - `messaging.js`: `sendMessageSafely()`/`sendMessageToTabSafely()` có timeout + handle invalidation
   - `content.js`: **classic script** (không dùng `import`), tối giản footprint + privacy-first
 - **File Organization**

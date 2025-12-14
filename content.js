@@ -66,6 +66,14 @@ async function sendMessageSafely(message, { timeoutMs = 2000 } = {}) {
 // Constants specific to content.js
 const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 
+// Message actions (prefer shared global injected via `actions_global.js`).
+const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
+  checkCurrentUrl: 'checkCurrentUrl',
+  youtubeNavigation: 'youtubeNavigation',
+  closeTab: 'closeTab',
+  distractingWebsite: 'distractingWebsite'
+});
+
 // Global variables
 let currentElement = null;
 let lastContentLength = 0;
@@ -355,7 +363,7 @@ function setCurrentElement(element) {
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
   if (!isExtensionEnabled) return false;
-  if (message?.action !== 'distractingWebsite') return false;
+  if (message?.action !== messageActions.distractingWebsite) return false;
 
   showDistractionWarning(message.data);
   sendResponse({ received: true });
@@ -377,8 +385,11 @@ function showDistractionWarning(data) {
     return;
   }
 
-  // Log thông tin về cảnh báo
-  console.log('🌸 Showing distraction warning:', data);
+  // Log minimal info (privacy-first: avoid logging full URL/message).
+  console.log('🌸 Showing distraction warning:', {
+    isDeepWorkBlocked: !!data.isDeepWorkBlocked,
+    isInDeepWorkMode: !!data.isInDeepWorkMode
+  });
 
   // Remove existing warning
   const existingWarning = document.getElementById('mai-distraction-warning');
@@ -504,7 +515,7 @@ function setupWarningButtons(warningDiv) {
       if (countdownEl) countdownEl.textContent = secondsLeft;
     } else {
       clearInterval(countdownInterval);
-      sendMessageSafely({ action: 'closeTab' });
+      sendMessageSafely({ action: messageActions.closeTab });
     }
   }, 1000);
 
@@ -516,7 +527,7 @@ function setupWarningButtons(warningDiv) {
   backBtn?.addEventListener('click', () => {
     clearInterval(countdownInterval);
     warningDiv.remove();
-    sendMessageSafely({ action: 'closeTab' });
+    sendMessageSafely({ action: messageActions.closeTab });
   });
 }
 
@@ -538,7 +549,7 @@ function checkIfDistractingSite() {
     if (!currentUrl || currentUrl === 'about:blank') return;
 
     sendMessageSafely({
-      action: 'checkCurrentUrl',
+      action: messageActions.checkCurrentUrl,
       data: { url: currentUrl }
     });
   } catch (error) {
@@ -566,11 +577,11 @@ function startYouTubeNavigationObserver() {
     youtubeObserver = new MutationObserver(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastYoutubeUrl) {
-        console.log('🌸 YouTube URL changed:', lastYoutubeUrl, '->', currentUrl);
+        console.log('🌸 YouTube route changed');
         lastYoutubeUrl = currentUrl;
         
         sendMessageSafely({
-          action: 'youtubeNavigation',
+          action: messageActions.youtubeNavigation,
           data: { url: currentUrl }
         });
       }
@@ -595,11 +606,11 @@ function startYouTubeNavigationObserver() {
     youtubeFallbackIntervalId = setInterval(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastYoutubeUrl) {
-        console.log('🌸 YouTube URL changed (fallback method):', lastYoutubeUrl, '->', currentUrl);
+        console.log('🌸 YouTube route changed (fallback method)');
         lastYoutubeUrl = currentUrl;
         
         sendMessageSafely({
-          action: 'youtubeNavigation',
+          action: messageActions.youtubeNavigation,
           data: { url: currentUrl }
         });
       }

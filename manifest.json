@@ -41,7 +41,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
+      "js": ["actions_global.js", "content.js"],
       "run_at": "document_idle"
     }
   ]
