@@ -3,6 +3,7 @@
  * Content Script: Monitors text input fields, displays UI elements
  * @feature f00 - Text Input Detection
  * @feature f01 - Distraction Blocking (UI part)
+ * @feature f03 - Break Reminder (badge ticker fallback)
  * @feature f04c - Deep Work Mode Integration
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
@@ -112,6 +113,9 @@ Các lệnh tắt cần ghi nhớ:
 - vx: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi
 - vd: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.`;
 
+// [f03] Opera badge tick fallback: keep badge updated per-second by waking the SW via messages.
+const OPERA_BADGE_TICK_INTERVAL_MS = 1000;
+
 // Message actions (prefer shared global injected via `actions_global.js`).
 const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   checkCurrentUrl: 'checkCurrentUrl',
@@ -119,7 +123,13 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
   clipmdStart: 'clipmdStart',
-  clipmdConvertMarkdown: 'clipmdConvertMarkdown'
+  clipmdConvertMarkdown: 'clipmdConvertMarkdown',
+  resetBreakReminder: 'resetBreakReminder',
+  getBreakReminderState: 'getBreakReminderState',
+  breakReminderBadgeTick: 'breakReminderBadgeTick',
+  getState: 'getState',
+  updateState: 'updateState',
+  stateUpdated: 'stateUpdated'
 });
 
 // Global variables
@@ -128,6 +138,10 @@ let lastContentLength = 0;
 let typingTimer = null;
 let isDistractionBlockingEnabled = true;
 let domListenersAttached = false;
+
+// [f03] Opera badge tick fallback state
+let operaBadgeTickIntervalId = null;
+let operaBadgeTickInFlight = false;
 
 // [f07] ChatGPT helpers state
 let isChatgptZenModeEnabled = true;
@@ -151,15 +165,19 @@ function initialize() {
   console.log('🌸 Mai content script initialized');
 
   // Load settings early so we can avoid unnecessary work for disabled features
-  chrome.storage.local.get(['blockDistractions', CHATGPT_ZEN_STORAGE_KEY], (result) => {
-    const { blockDistractions } = result || {};
-    isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
+  chrome.storage.local.get(
+    ['blockDistractions', CHATGPT_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
+    (result) => {
+      const { blockDistractions } = result || {};
+      isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
 
-    const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
-    isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : true;
+      const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
+      isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : true;
 
-    syncContentScriptActiveState();
-  });
+      syncContentScriptActiveState();
+      syncOperaBadgeTickFallback(result || {});
+    }
+  );
   
   // Listen for messages from background script (attach once; will ignore when disabled)
   chrome.runtime.onMessage.addListener(handleBackgroundMessages);
@@ -189,6 +207,18 @@ function initialize() {
       // Khi trạng thái flow thay đổi, kiểm tra lại URL hiện tại để áp dụng chặn trang nhắn tin (f04c)
       checkIfDistractingSite();
     }
+
+    // [f03] Opera badge tick fallback: sync on any timer-related change.
+    if (
+      changes.isInFlow ||
+      changes.breakReminderEnabled ||
+      changes.currentTask ||
+      changes.reminderStartTime ||
+      changes.reminderInterval ||
+      changes.reminderExpectedEndTime
+    ) {
+      syncOperaBadgeTickFallback();
+    }
   });
 }
 
@@ -203,6 +233,7 @@ function attachDomListeners() {
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
   document.addEventListener('click', handleClick);
+  document.addEventListener('visibilitychange', () => syncOperaBadgeTickFallback());
 
   domListenersAttached = true;
 }
@@ -222,6 +253,94 @@ function syncContentScriptActiveState() {
 
   syncChatgptHelperActiveState();
   checkIfDistractingSite();
+}
+
+/******************************************************************************
+ * OPERA BADGE TICK FALLBACK [f03]
+ ******************************************************************************/
+
+/**
+ * Check whether the browser is Opera (best-effort via UA marker).
+ * @returns {boolean}
+ */
+function isOperaBrowser() {
+  try {
+    const ua = typeof navigator?.userAgent === 'string' ? navigator.userAgent : '';
+    return /\bOPR\//.test(ua);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Determine whether Deep Work timer is active (privacy-first: no task content logging).
+ * @param {Object} data - Storage snapshot
+ * @returns {boolean}
+ */
+function isDeepWorkTimerActive(data) {
+  const isInFlow = !!data?.isInFlow;
+  const breakReminderEnabled = !!data?.breakReminderEnabled;
+  const hasTask = !!(data?.currentTask && String(data.currentTask).trim());
+  return !!(isInFlow && breakReminderEnabled && hasTask);
+}
+
+/**
+ * Start per-second ticker that wakes SW to update badge.
+ * @returns {void}
+ */
+function startOperaBadgeTickFallback() {
+  if (operaBadgeTickIntervalId) return;
+
+  operaBadgeTickIntervalId = setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    if (operaBadgeTickInFlight) return;
+    operaBadgeTickInFlight = true;
+
+    sendMessageSafely({ action: messageActions.breakReminderBadgeTick }, { timeoutMs: 800 })
+      .catch(() => {})
+      .finally(() => {
+        operaBadgeTickInFlight = false;
+      });
+  }, OPERA_BADGE_TICK_INTERVAL_MS);
+
+  // Kick immediately once (so badge updates right away without waiting 1s).
+  sendMessageSafely({ action: messageActions.breakReminderBadgeTick }, { timeoutMs: 800 }).catch(() => {});
+}
+
+/**
+ * Stop Opera badge tick fallback.
+ * @returns {void}
+ */
+function stopOperaBadgeTickFallback() {
+  if (operaBadgeTickIntervalId) clearInterval(operaBadgeTickIntervalId);
+  operaBadgeTickIntervalId = null;
+  operaBadgeTickInFlight = false;
+}
+
+/**
+ * Sync Opera badge tick fallback with current timer state (only runs on Opera).
+ * @param {Object} [prefetched] - Optional storage snapshot to avoid extra reads
+ * @returns {void}
+ */
+function syncOperaBadgeTickFallback(prefetched) {
+  if (!isOperaBrowser()) return;
+
+  const syncWithData = (data) => {
+    const shouldRun = isDeepWorkTimerActive(data) && document.visibilityState === 'visible';
+    if (shouldRun) startOperaBadgeTickFallback();
+    else stopOperaBadgeTickFallback();
+  };
+
+  if (prefetched && typeof prefetched === 'object') {
+    syncWithData(prefetched);
+    return;
+  }
+
+  try {
+    chrome.storage.local.get(['isInFlow', 'breakReminderEnabled', 'currentTask'], (data) => syncWithData(data || {}));
+  } catch {
+    stopOperaBadgeTickFallback();
+  }
 }
 
 

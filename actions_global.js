@@ -16,6 +16,7 @@ globalThis.MAIZONE_ACTIONS = Object.freeze({
   clipmdConvertMarkdown: 'clipmdConvertMarkdown',
   resetBreakReminder: 'resetBreakReminder',
   getBreakReminderState: 'getBreakReminderState',
+  breakReminderBadgeTick: 'breakReminderBadgeTick',
   getState: 'getState',
   updateState: 'updateState',
   stateUpdated: 'stateUpdated'

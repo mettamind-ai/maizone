@@ -128,6 +128,63 @@ function setupMessageListeners() {
       return true;
     }
 
+    // [f03] Some browsers (notably Opera) may throttle alarms/offscreen updates.
+    // A content-script ticker can send this action every second to keep the badge fresh.
+    if (message.action === messageActions.breakReminderBadgeTick) {
+      ensureInitialized()
+        .then(async () => {
+          try {
+            const {
+              breakReminderEnabled,
+              isInFlow,
+              currentTask,
+              reminderExpectedEndTime,
+              reminderStartTime,
+              reminderInterval
+            } = getState();
+
+            const isActive = !!(breakReminderEnabled && isInFlow && currentTask);
+            if (!isActive) {
+              try {
+                chrome.action?.setBadgeText({ text: '' });
+              } catch {
+                // ignore
+              }
+              sendResponse?.({ ok: true, active: false });
+              return;
+            }
+
+            let expectedEndTime = null;
+            if (typeof reminderExpectedEndTime === 'number' && Number.isFinite(reminderExpectedEndTime)) {
+              expectedEndTime = reminderExpectedEndTime;
+            } else if (
+              typeof reminderStartTime === 'number' &&
+              Number.isFinite(reminderStartTime) &&
+              typeof reminderInterval === 'number' &&
+              Number.isFinite(reminderInterval)
+            ) {
+              expectedEndTime = reminderStartTime + reminderInterval;
+            }
+
+            if (typeof expectedEndTime === 'number' && Number.isFinite(expectedEndTime) && Date.now() >= expectedEndTime) {
+              await handleBreakReminderEnd();
+              sendResponse?.({ ok: true, active: false, ended: true });
+              return;
+            }
+
+            updateBadgeWithTimerDisplay();
+            sendResponse?.({ ok: true, active: true });
+          } catch (error) {
+            sendResponse?.({ ok: false, error: error?.message || String(error) });
+          }
+        })
+        .catch((error) => {
+          sendResponse?.({ ok: false, error: error?.message || String(error) });
+        });
+
+      return true;
+    }
+
     return false;
   });
 }
