@@ -11,6 +11,7 @@
 - **Current Architecture (source of truth)**
   - `background_state.js`: state runtime + MV3 init gating + broadcast
   - `state_core.js`: schema + sanitize/invariants/diff (pure functions, dùng chung)
+  - `state_contract.js`: allowlists/contract cho get/update state giữa UI/background/content
   - `state_helpers.js`: UI get/update state (message first, fallback storage **đã sanitize**)
   - `actions.js`: `messageActions` constants (không hardcode string rải rác)
   - `messaging.js`: `sendMessageSafely()`/`sendMessageToTabSafely()` có timeout + handle invalidation

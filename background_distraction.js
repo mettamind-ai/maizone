@@ -15,14 +15,58 @@ const WARNING_COOLDOWN_MS = 4000;
 const lastWarningByTabId = new Map();
 
 /**
+ * Cleanup debounce entries when tabs close/replace (prevent memory leak).
+ * @returns {void}
+ */
+function setupTabLifecycleCleanup() {
+  if (!chrome?.tabs?.onRemoved || !chrome?.tabs?.onReplaced) return;
+
+  if (!chrome.tabs.onRemoved.hasListener(handleTabRemoved)) {
+    chrome.tabs.onRemoved.addListener(handleTabRemoved);
+  }
+
+  if (!chrome.tabs.onReplaced.hasListener(handleTabReplaced)) {
+    chrome.tabs.onReplaced.addListener(handleTabReplaced);
+  }
+}
+
+/**
+ * Handle tab removed.
+ * @param {number} tabId - Removed tab id
+ * @returns {void}
+ */
+function handleTabRemoved(tabId) {
+  lastWarningByTabId.delete(tabId);
+}
+
+/**
+ * Handle tab replaced.
+ * @param {number} addedTabId - New tab id
+ * @param {number} removedTabId - Old tab id
+ * @returns {void}
+ */
+function handleTabReplaced(addedTabId, removedTabId) {
+  lastWarningByTabId.delete(removedTabId);
+  // Preserve warnings for the new tab as a fresh session.
+  lastWarningByTabId.delete(addedTabId);
+}
+
+/**
  * Normalize URL to a stable key for debounce.
  * @param {string} url - Full URL
  * @returns {string}
  */
 function getWarningKey(url) {
   try {
-    const { hostname } = new URL(url);
-    return hostname.toLowerCase().replace(/^www\./, '');
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
+
+    // SPA-heavy: debounce by route to avoid suppressing legitimate warnings.
+    if (hostname.endsWith('youtube.com') || hostname === 'youtu.be') {
+      return `${hostname}${parsed.pathname}${parsed.search || ''}`;
+    }
+
+    return hostname;
   } catch {
     return String(url || '');
   }
@@ -32,12 +76,13 @@ function getWarningKey(url) {
  * Decide whether to warn again for the same tab/site within a cooldown.
  * @param {number} tabId - Chrome tab id
  * @param {string} url - Current URL
+ * @param {string} modeKey - Extra key part (ex: deep work mode)
  * @returns {boolean}
  */
-function shouldSendWarning(tabId, url) {
+function shouldSendWarning(tabId, url, modeKey = '') {
   if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return true;
 
-  const key = getWarningKey(url);
+  const key = `${getWarningKey(url)}|${modeKey}`;
   const now = Date.now();
   const previous = lastWarningByTabId.get(tabId);
 
@@ -52,6 +97,7 @@ function shouldSendWarning(tabId, url) {
  */
 export function initDistraction() {
   setupMessageListeners();
+  setupTabLifecycleCleanup();
   syncDistractionBlocking();
 }
 
@@ -239,8 +285,6 @@ async function handleWebNavigation(details) {
  */
 function sendWarningToTab(tabId, url) {
   try {
-    if (!shouldSendWarning(tabId, url)) return;
-
     const { isInFlow, deepWorkBlockedSites } = getState();
     
     // Check if URL is in deep work blocked sites
@@ -253,6 +297,9 @@ function sendWarningToTab(tabId, url) {
     });
 
     console.log(`🌸 Sending warning for ${url}. Deep work: ${isInFlow}, Is messaging site: ${isDeepWorkBlocked}`);
+
+    const modeKey = isInFlow ? (isDeepWorkBlocked ? 'deepWorkBlocked' : 'deepWork') : 'normal';
+    if (!shouldSendWarning(tabId, url, modeKey)) return;
 
     // Customize message based on site type
     let message = '';

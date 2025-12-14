@@ -56,17 +56,49 @@ function normalizeString(value, fallback) {
 }
 
 /**
- * Chuẩn hoá mảng string (trim + lọc empty).
+ * Chuẩn hoá mảng domain (lowercase, strip protocol/path, strip www, dedupe, sort).
  * @param {any} value - Giá trị cần normalize
  * @param {Array<string>} fallback - Giá trị mặc định nếu không hợp lệ
+ * @param {Object} [options]
+ * @param {number} [options.maxItems=200] - Số lượng tối đa
  * @returns {Array<string>}
  */
-function normalizeArrayOfStrings(value, fallback) {
+function normalizeDomainList(value, fallback, { maxItems = 200 } = {}) {
   if (!Array.isArray(value)) return fallback;
-  return value
-    .filter((v) => typeof v === 'string')
-    .map((v) => v.trim())
-    .filter(Boolean);
+
+  const out = [];
+  const seen = new Set();
+
+  for (const rawValue of value) {
+    if (typeof rawValue !== 'string') continue;
+
+    const raw = rawValue.trim().toLowerCase();
+    if (!raw) continue;
+
+    const withoutProtocol = raw.replace(/^https?:\/\//, '');
+    const hostname = withoutProtocol
+      .split('/')[0]
+      .split('?')[0]
+      .split('#')[0]
+      .replace(/^www\./, '');
+
+    if (!hostname) continue;
+    if (hostname.length > 253) continue;
+    if (!hostname.includes('.')) continue;
+    if (hostname.startsWith('.') || hostname.endsWith('.')) continue;
+    if (hostname.includes('..')) continue;
+    if (/\s/.test(hostname)) continue;
+    if (!/^[a-z0-9.-]+$/.test(hostname)) continue;
+
+    if (seen.has(hostname)) continue;
+    seen.add(hostname);
+    out.push(hostname);
+
+    if (out.length >= maxItems) break;
+  }
+
+  out.sort();
+  return out;
 }
 
 /**
@@ -80,6 +112,45 @@ function normalizeNumberOrNull(value, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
+/***** DOMAIN LISTS *****/
+
+const MAX_SITE_LIST_ITEMS = 200;
+
+/***** TIMER NORMALIZATION *****/
+
+const MIN_INTERVAL_MS = 60 * 1000;
+const MAX_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Chuẩn hoá interval ms (giới hạn khoảng hợp lý).
+ * @param {any} value - Raw value
+ * @param {number|null} fallback - Fallback
+ * @returns {number|null}
+ */
+function normalizeIntervalMs(value, fallback) {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  if (value < MIN_INTERVAL_MS || value > MAX_INTERVAL_MS) return fallback;
+  return value;
+}
+
+/***** TASK NORMALIZATION *****/
+
+const MAX_TASK_LENGTH = 120;
+
+/**
+ * Chuẩn hoá task string (trim + giới hạn độ dài).
+ * @param {any} value - Raw value
+ * @param {string} fallback - Fallback
+ * @returns {string}
+ */
+function normalizeTask(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.length > MAX_TASK_LENGTH ? trimmed.slice(0, MAX_TASK_LENGTH) : trimmed;
+}
+
 /***** INVARIANTS *****/
 
 /**
@@ -90,9 +161,8 @@ function normalizeNumberOrNull(value, fallback) {
 function enforceStateInvariants(nextState) {
   const sanitized = { ...nextState };
 
-  if (!sanitized.currentTask) {
-    sanitized.currentTask = '';
-  }
+  // Ensure task is always a string.
+  if (!sanitized.currentTask) sanitized.currentTask = '';
 
   if (!sanitized.isEnabled) {
     sanitized.isInFlow = false;
@@ -131,14 +201,16 @@ export function sanitizeStoredState(storedState) {
 
   const merged = {
     isEnabled: normalizeBoolean(stored.isEnabled, base.isEnabled),
-    currentTask: normalizeString(stored.currentTask, base.currentTask),
+    currentTask: normalizeTask(stored.currentTask, base.currentTask),
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
     blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
     breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
-    distractingSites: normalizeArrayOfStrings(stored.distractingSites, base.distractingSites),
-    deepWorkBlockedSites: normalizeArrayOfStrings(stored.deepWorkBlockedSites, base.deepWorkBlockedSites),
+    distractingSites: normalizeDomainList(stored.distractingSites, base.distractingSites, { maxItems: MAX_SITE_LIST_ITEMS }),
+    deepWorkBlockedSites: normalizeDomainList(stored.deepWorkBlockedSites, base.deepWorkBlockedSites, {
+      maxItems: MAX_SITE_LIST_ITEMS
+    }),
     reminderStartTime: normalizeNumberOrNull(stored.reminderStartTime, base.reminderStartTime),
-    reminderInterval: normalizeNumberOrNull(stored.reminderInterval, base.reminderInterval),
+    reminderInterval: normalizeIntervalMs(stored.reminderInterval, base.reminderInterval),
     reminderExpectedEndTime: normalizeNumberOrNull(stored.reminderExpectedEndTime, base.reminderExpectedEndTime)
   };
 
@@ -158,7 +230,7 @@ export function computeNextState(currentState, updates) {
   const sanitized = {};
 
   if ('isEnabled' in updates) sanitized.isEnabled = normalizeBoolean(updates.isEnabled, current.isEnabled);
-  if ('currentTask' in updates) sanitized.currentTask = normalizeString(updates.currentTask, current.currentTask);
+  if ('currentTask' in updates) sanitized.currentTask = normalizeTask(updates.currentTask, current.currentTask);
   if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, current.isInFlow);
   if ('blockDistractions' in updates) {
     sanitized.blockDistractions = normalizeBoolean(updates.blockDistractions, current.blockDistractions);
@@ -167,17 +239,21 @@ export function computeNextState(currentState, updates) {
     sanitized.breakReminderEnabled = normalizeBoolean(updates.breakReminderEnabled, current.breakReminderEnabled);
   }
   if ('distractingSites' in updates) {
-    sanitized.distractingSites = normalizeArrayOfStrings(updates.distractingSites, current.distractingSites);
+    sanitized.distractingSites = normalizeDomainList(updates.distractingSites, current.distractingSites, {
+      maxItems: MAX_SITE_LIST_ITEMS
+    });
   }
   if ('deepWorkBlockedSites' in updates) {
-    sanitized.deepWorkBlockedSites = normalizeArrayOfStrings(updates.deepWorkBlockedSites, current.deepWorkBlockedSites);
+    sanitized.deepWorkBlockedSites = normalizeDomainList(updates.deepWorkBlockedSites, current.deepWorkBlockedSites, {
+      maxItems: MAX_SITE_LIST_ITEMS
+    });
   }
 
   if ('reminderStartTime' in updates) {
     sanitized.reminderStartTime = normalizeNumberOrNull(updates.reminderStartTime, current.reminderStartTime);
   }
   if ('reminderInterval' in updates) {
-    sanitized.reminderInterval = normalizeNumberOrNull(updates.reminderInterval, current.reminderInterval);
+    sanitized.reminderInterval = normalizeIntervalMs(updates.reminderInterval, current.reminderInterval);
   }
   if ('reminderExpectedEndTime' in updates) {
     sanitized.reminderExpectedEndTime = normalizeNumberOrNull(updates.reminderExpectedEndTime, current.reminderExpectedEndTime);
@@ -228,4 +304,3 @@ export function diffState(prevState, nextState) {
 
   return delta;
 }
-

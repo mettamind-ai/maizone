@@ -68,15 +68,32 @@ function setupMessageListeners() {
 function handleStateUpdated(updates) {
   if (!updates || typeof updates !== 'object') return;
 
+  const shouldSync =
+    'isEnabled' in updates ||
+    'breakReminderEnabled' in updates ||
+    'isInFlow' in updates ||
+    'currentTask' in updates ||
+    'reminderStartTime' in updates ||
+    'reminderInterval' in updates ||
+    'reminderExpectedEndTime' in updates;
+
+  if (!shouldSync) return;
+
   const shouldStop =
     ('isEnabled' in updates && !updates.isEnabled) ||
     ('breakReminderEnabled' in updates && !updates.breakReminderEnabled) ||
     ('isInFlow' in updates && !updates.isInFlow) ||
     ('currentTask' in updates && !updates.currentTask);
 
-  if (!shouldStop) return;
+  if (shouldStop) {
+    stopBreakReminder();
+    return;
+  }
 
-  stopBreakReminder();
+  // If something relevant changed and we didn't stop, ensure alarms/badge reflect current state.
+  ensureInitialized()
+    .then(() => initializeBreakReminderIfEnabled())
+    .catch((error) => console.error('🌸🌸🌸 Error syncing break reminder after state update:', error));
 }
 
 /***** ALARMS *****/
@@ -358,13 +375,23 @@ function resetBreakReminder(data, sendResponse) {
 
         console.log('🌸 Resetting break reminder timer with task:', task);
 
+        stopBreakReminder();
+
+        const interval = BREAK_REMINDER_INTERVAL;
+        const reminderStartTime = Date.now();
+        const reminderExpectedEndTime = reminderStartTime + interval;
+
         await updateState({
           currentTask: task,
           isInFlow: true,
-          breakReminderEnabled: true
+          breakReminderEnabled: true,
+          reminderStartTime,
+          reminderInterval: interval,
+          reminderExpectedEndTime
         });
 
-        await startBreakReminder();
+        scheduleBreakReminderAlarms(reminderExpectedEndTime);
+        updateBadgeWithTimerDisplay();
 
         sendResponse?.({ success: true });
       } catch (error) {

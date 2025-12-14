@@ -7,6 +7,9 @@
 import { sendMessageSafely } from './messaging.js';
 import { messageActions } from './actions.js';
 import { computeNextState, diffState, sanitizeStoredState } from './state_core.js';
+import { UI_ALLOWED_UPDATE_KEYS } from './state_contract.js';
+
+const UI_ALLOWED_UPDATE_KEYS_SET = new Set(UI_ALLOWED_UPDATE_KEYS);
 
 /***** GET STATE *****/
 
@@ -54,15 +57,28 @@ export async function getStateSafely(keyOrKeys = null) {
 export async function updateStateSafely(payload) {
   if (!payload || typeof payload !== 'object') return false;
 
-  const response = await sendMessageSafely({ action: messageActions.updateState, payload });
-  if (response?.success) return true;
+  const filteredPayload = {};
+  Object.keys(payload).forEach((key) => {
+    if (!UI_ALLOWED_UPDATE_KEYS_SET.has(key)) return;
+    filteredPayload[key] = payload[key];
+  });
+
+  if (!Object.keys(filteredPayload).length) return false;
+
+  const response = await sendMessageSafely(
+    { action: messageActions.updateState, payload: filteredPayload },
+    { timeoutMs: 6000 }
+  );
+
+  // Background replied: do NOT fall back to storage write (avoid drift).
+  if (response !== null) return !!response?.success;
 
   const storedState = await new Promise((resolve) => {
     chrome.storage.local.get(null, (data) => resolve(data || {}));
   });
 
   const currentState = sanitizeStoredState(storedState);
-  const nextState = computeNextState(currentState, payload);
+  const nextState = computeNextState(currentState, filteredPayload);
   const delta = diffState(currentState, nextState);
 
   if (!Object.keys(delta).length) return true;
