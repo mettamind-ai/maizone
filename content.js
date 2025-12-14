@@ -70,6 +70,7 @@ const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 let currentElement = null;
 let lastContent = '';
 let typingTimer = null;
+let isExtensionEnabled = true;
 
 /******************************************************************************
  * INITIALIZATION
@@ -80,6 +81,11 @@ let typingTimer = null;
  */
 function initialize() {
   console.log('🌸 Mai content script initialized');
+
+  // Load enabled state early so we can avoid unnecessary listeners work when disabled
+  chrome.storage.local.get(['isEnabled'], ({ isEnabled }) => {
+    isExtensionEnabled = typeof isEnabled === 'boolean' ? isEnabled : true;
+  });
 
   // Set up event listeners
   document.addEventListener('focusin', handleFocusIn);
@@ -101,6 +107,20 @@ function initialize() {
   
   // [f04c] Listen for deep work status changes
   chrome.storage.onChanged.addListener((changes) => {
+    if (changes.isEnabled) {
+      isExtensionEnabled = !!changes.isEnabled.newValue;
+
+      if (!isExtensionEnabled) {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+        currentElement = null;
+        lastContent = '';
+
+        document.getElementById('mai-distraction-warning')?.remove?.();
+        return;
+      }
+    }
+
     if (changes.isInFlow) {
       console.log('🌸 Deep Work status changed:', changes.isInFlow.newValue);
       // Khi trạng thái flow thay đổi, kiểm tra lại URL hiện tại để áp dụng chặn trang nhắn tin (f04c)
@@ -121,6 +141,7 @@ function initialize() {
  * @returns {void}
  */
 function handleFocusIn(event) {
+  if (!isExtensionEnabled) return;
   try {
     const element = event.target;
     if (isTextInput(element)) {
@@ -147,6 +168,7 @@ function handleFocusIn(event) {
  * Handle click on text input elements
  */
 function handleClick(event) {
+  if (!isExtensionEnabled) return;
   try {
     const element = event.target;
     if (isTextInput(element) && element !== currentElement) {
@@ -167,6 +189,7 @@ function handleClick(event) {
  * Handle typing events (shared by keydown and keyup)
  */
 function handleTypingEvent(event) {
+  if (!isExtensionEnabled) return;
   if (!currentElement) return;
   
   clearTimeout(typingTimer);
