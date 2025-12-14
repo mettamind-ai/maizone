@@ -77,7 +77,6 @@ function handleStateUpdated(updates) {
   if (!shouldStop) return;
 
   stopBreakReminder();
-  chrome.action.setBadgeText({ text: '' });
 }
 
 /***** ALARMS *****/
@@ -113,7 +112,7 @@ async function handleAlarm(alarm) {
   }
 
   if (alarm.name === BREAK_REMINDER_END_ALARM) {
-    handleBreakReminderEnd();
+    await handleBreakReminderEnd();
   }
 }
 
@@ -161,7 +160,7 @@ function stopBreakReminder() {
  * Initialize break reminder if enabled (service worker restart safe).
  * @returns {void}
  */
-function initializeBreakReminderIfEnabled() {
+async function initializeBreakReminderIfEnabled() {
   const {
     breakReminderEnabled,
     isEnabled,
@@ -182,12 +181,12 @@ function initializeBreakReminderIfEnabled() {
   const expectedEndTime = reminderExpectedEndTime || (startTime + interval);
 
   if (Date.now() >= expectedEndTime) {
-    handleBreakReminderEnd();
+    await handleBreakReminderEnd();
     return;
   }
 
   if (!reminderStartTime || !reminderExpectedEndTime || !reminderInterval) {
-    updateState({
+    await updateState({
       reminderStartTime: startTime,
       reminderInterval: interval,
       reminderExpectedEndTime: expectedEndTime
@@ -230,7 +229,7 @@ function updateBadgeWithTimerDisplay() {
  * @param {number} [customInterval] - Custom interval in ms
  * @returns {void}
  */
-function startBreakReminder(customInterval) {
+async function startBreakReminder(customInterval) {
   stopBreakReminder();
 
   const { isEnabled, isInFlow, currentTask, breakReminderEnabled } = getState();
@@ -246,7 +245,7 @@ function startBreakReminder(customInterval) {
   const reminderStartTime = Date.now();
   const reminderExpectedEndTime = reminderStartTime + interval;
 
-  updateState({
+  await updateState({
     reminderStartTime,
     reminderInterval: interval,
     reminderExpectedEndTime
@@ -260,7 +259,7 @@ function startBreakReminder(customInterval) {
  * Handle timer end alarm (end Deep Work cycle + notify user).
  * @returns {void}
  */
-function handleBreakReminderEnd() {
+async function handleBreakReminderEnd() {
   const { isEnabled, isInFlow, currentTask, breakReminderEnabled, reminderExpectedEndTime } = getState();
 
   // No longer valid -> just cleanup.
@@ -284,7 +283,7 @@ function handleBreakReminderEnd() {
   console.log('🌸 Break time reached! Ending Deep Work cycle...');
 
   // End cycle first so popup resets deterministically.
-  updateState({
+  await updateState({
     isInFlow: false,
     currentTask: '',
     breakReminderEnabled: false
@@ -349,7 +348,7 @@ function showBreakReminderNotification() {
  */
 function resetBreakReminder(data, sendResponse) {
   ensureInitialized()
-    .then(() => {
+    .then(async () => {
       try {
         const task = typeof data?.task === 'string' ? data.task.trim() : '';
         if (!task) {
@@ -359,13 +358,13 @@ function resetBreakReminder(data, sendResponse) {
 
         console.log('🌸 Resetting break reminder timer with task:', task);
 
-        updateState({
+        await updateState({
           currentTask: task,
           isInFlow: true,
           breakReminderEnabled: true
         });
 
-        startBreakReminder();
+        await startBreakReminder();
 
         sendResponse?.({ success: true });
       } catch (error) {
@@ -386,7 +385,7 @@ function resetBreakReminder(data, sendResponse) {
  */
 function getBreakReminderState(sendResponse) {
   ensureInitialized()
-    .then(() => {
+    .then(async () => {
       const {
         breakReminderEnabled,
         reminderStartTime,
@@ -410,7 +409,7 @@ function getBreakReminderState(sendResponse) {
       }
 
       if (!reminderStartTime || !reminderExpectedEndTime) {
-        startBreakReminder(reminderInterval || BREAK_REMINDER_INTERVAL);
+        await startBreakReminder(reminderInterval || BREAK_REMINDER_INTERVAL);
         const newState = getState();
         sendResponse({
           enabled: true,
