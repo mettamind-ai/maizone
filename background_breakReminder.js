@@ -7,6 +7,7 @@
 
 import { getState, updateState } from './background_state.js';
 import { BREAK_REMINDER_INTERVAL, BREAK_REMINDER_MESSAGES } from './constants.js';
+import { messageActions } from './actions.js';
 
 /***** ALARM NAMES *****/
 
@@ -33,17 +34,19 @@ export function initBreakReminder() {
  */
 function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'resetBreakReminder') {
+    if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
+
+    if (message.action === messageActions.resetBreakReminder) {
       resetBreakReminder(message.data, sendResponse);
       return true;
     }
 
-    if (message.action === 'getBreakReminderState') {
+    if (message.action === messageActions.getBreakReminderState) {
       getBreakReminderState(sendResponse);
       return true;
     }
 
-    if (message.action === 'stateUpdated') {
+    if (message.action === messageActions.stateUpdated) {
       handleStateUpdated(message.state);
       return false;
     }
@@ -407,4 +410,3 @@ function getBreakReminderState(sendResponse) {
     expectedEndTime: reminderExpectedEndTime
   });
 }
-

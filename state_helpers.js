@@ -5,6 +5,7 @@
  */
 
 import { sendMessageSafely } from './messaging.js';
+import { messageActions } from './actions.js';
 
 /***** GET STATE *****/
 
@@ -14,7 +15,7 @@ import { sendMessageSafely } from './messaging.js';
  * @returns {Promise<Object>} Object state tương ứng (partial hoặc full)
  */
 export async function getStateSafely(keyOrKeys = null) {
-  const request = { action: 'getState' };
+  const request = { action: messageActions.getState };
   if (Array.isArray(keyOrKeys)) request.keys = keyOrKeys;
   else if (typeof keyOrKeys === 'string') request.key = keyOrKeys;
 
@@ -44,10 +45,9 @@ export async function getStateSafely(keyOrKeys = null) {
 export async function updateStateSafely(payload) {
   if (!payload || typeof payload !== 'object') return false;
 
-  const response = await sendMessageSafely({ action: 'updateState', payload });
+  const response = await sendMessageSafely({ action: messageActions.updateState, payload });
   if (response?.success) return true;
 
   await new Promise((resolve) => chrome.storage.local.set(payload, () => resolve()));
   return true;
 }
-

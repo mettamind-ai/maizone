@@ -7,6 +7,7 @@
 
 import { getState } from './background_state.js';
 import { sendMessageToTabSafely } from './messaging.js';
+import { messageActions } from './actions.js';
 
 /**
  * Initialize distraction blocking if enabled
@@ -21,15 +22,17 @@ export function initDistraction() {
  */
 function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'checkCurrentUrl') {
+    if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
+
+    if (message.action === messageActions.checkCurrentUrl) {
       onCheckCurrentUrl(message.data, sender.tab, sendResponse);
       return true;
     }
-    else if (message.action === 'youtubeNavigation') {
+    else if (message.action === messageActions.youtubeNavigation) {
       onYouTubeNavigation(message.data, sender.tab, sendResponse);
       return true;
     }
-    else if (message.action === 'closeTab') {
+    else if (message.action === messageActions.closeTab) {
       const tabId = sender?.tab?.id;
       if (typeof tabId === 'number') {
         chrome.tabs.remove(tabId);
@@ -39,7 +42,7 @@ function setupMessageListeners() {
       }
       return true;
     }
-    else if (message.action === 'stateUpdated') {
+    else if (message.action === messageActions.stateUpdated) {
       handleStateUpdated(message.state);
       return false;
     }
@@ -213,7 +216,7 @@ function sendWarningToTab(tabId, url) {
 
     // Send message to content script
     sendMessageToTabSafely(tabId, {
-      action: 'distractingWebsite',
+      action: messageActions.distractingWebsite,
       data: {
         url,
         message,

@@ -7,6 +7,7 @@
 
 import { sendMessageSafely } from './messaging.js';
 import { getStateSafely, updateStateSafely } from './state_helpers.js';
+import { messageActions } from './actions.js';
 
 /******************************************************************************
  * ELEMENT REFERENCES AND VARIABLES
@@ -56,7 +57,7 @@ function initializePopup() {
   
   // Listen for state updates from background script
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === 'stateUpdated') {
+    if (message?.action === messageActions.stateUpdated) {
       handleStateUpdate(message.state);
     }
   });
@@ -277,7 +278,7 @@ function setCurrentTask() {
 
   // Reset break reminder timer (authoritative start)
   sendMessageSafely({
-    action: 'resetBreakReminder',
+    action: messageActions.resetBreakReminder,
     data: { task }
   }).then((response) => {
     if (!response?.success) {
@@ -320,7 +321,7 @@ function updateCountdownTimer() {
     return;
   }
 
-  sendMessageSafely({ action: 'getBreakReminderState' })
+  sendMessageSafely({ action: messageActions.getBreakReminderState })
     .then((state) => {
       if (!state || !state.enabled || !state.startTime) {
         breakReminderCountdown.textContent = '(40:00)';

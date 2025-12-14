@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
+import { messageActions } from './actions.js';
 
 /***** DEFAULT STATE *****/
 
@@ -245,7 +246,7 @@ export async function updateState(updates) {
     // Broadcast state update to other parts of the extension
     try {
       chrome.runtime.sendMessage({
-        action: 'stateUpdated',
+        action: messageActions.stateUpdated,
         state: delta
       }).catch(() => {
         // Ignore errors from no listeners / SW lifecycle
@@ -264,7 +265,9 @@ export async function updateState(updates) {
 // Listen for state update requests
 export function setupStateListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === 'getState') {
+    if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
+
+    if (message.action === messageActions.getState) {
       if (Array.isArray(message.keys)) {
         const subset = {};
         message.keys.forEach((k) => {
@@ -278,7 +281,7 @@ export function setupStateListeners() {
       sendResponse(requestedState);
       return true;
     } 
-    else if (message.action === 'updateState') {
+    else if (message.action === messageActions.updateState) {
       if (!message.payload || typeof message.payload !== 'object') {
         sendResponse({ success: false, error: 'Invalid payload' });
         return true;

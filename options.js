@@ -7,6 +7,7 @@
  */
 
 import { getStateSafely, updateStateSafely } from './state_helpers.js';
+import { messageActions } from './actions.js';
 
 /***** INITIALIZATION *****/
 
@@ -29,7 +30,7 @@ async function initOptions() {
 
   // Listen for state updates
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === 'stateUpdated') {
+    if (message?.action === messageActions.stateUpdated) {
       handleStateUpdate(message.state);
     }
   });
