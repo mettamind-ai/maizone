@@ -147,12 +147,58 @@ function setupMessageListeners() {
     }
     else if (message.action === messageActions.closeTab) {
       const tabId = sender?.tab?.id;
-      if (typeof tabId === 'number') {
-        chrome.tabs.remove(tabId);
+
+      (async () => {
+        if (typeof tabId !== 'number' || !Number.isFinite(tabId)) {
+          sendResponse({ success: false, error: 'No tab to close' });
+          return;
+        }
+
+        await ensureInitialized();
+        const { isEnabled, blockDistractions } = getState();
+        if (!isEnabled || !blockDistractions) {
+          sendResponse({ success: false, error: 'Disabled' });
+          return;
+        }
+
+        const currentUrl = await new Promise((resolve) => {
+          chrome.tabs.get(tabId, (tab) => {
+            const error = chrome.runtime?.lastError;
+            if (error) return resolve('');
+            resolve(typeof tab?.url === 'string' ? tab.url : '');
+          });
+        });
+
+        const urlToVerify = currentUrl || (typeof sender?.tab?.url === 'string' ? sender.tab.url : '');
+        if (!urlToVerify || (!urlToVerify.startsWith('http://') && !urlToVerify.startsWith('https://'))) {
+          sendResponse({ success: false, error: 'No URL to verify' });
+          return;
+        }
+
+        const stillDistracting = await isDistractingWebsite(urlToVerify);
+        if (!stillDistracting) {
+          sendResponse({ success: false, error: 'Not distracting anymore' });
+          return;
+        }
+
+        const removed = await new Promise((resolve) => {
+          chrome.tabs.remove(tabId, () => {
+            const error = chrome.runtime?.lastError;
+            resolve(!error);
+          });
+        });
+
+        if (!removed) {
+          sendResponse({ success: false, error: 'Failed to close tab' });
+          return;
+        }
+
         sendResponse({ success: true });
-      } else {
-        sendResponse({ success: false, error: 'No tab to close' });
-      }
+      })().catch((error) => {
+        console.error('🌸🌸🌸 Error handling closeTab:', error);
+        sendResponse({ success: false, error: 'Internal error' });
+      });
+
       return true;
     }
     return false;

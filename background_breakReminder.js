@@ -235,6 +235,7 @@ async function initializeBreakReminderIfEnabled() {
   const interval = reminderInterval || BREAK_REMINDER_INTERVAL;
   const startTime = reminderStartTime || Date.now();
   const expectedEndTime = reminderExpectedEndTime || (startTime + interval);
+  let expectedEndTimeForAlarms = expectedEndTime;
 
   if (Date.now() >= expectedEndTime) {
     await handleBreakReminderEnd();
@@ -247,9 +248,19 @@ async function initializeBreakReminderIfEnabled() {
       reminderInterval: interval,
       reminderExpectedEndTime: expectedEndTime
     });
+
+    // After awaited work, re-check state to avoid scheduling orphan alarms.
+    const refreshed = getState();
+    if (!refreshed.breakReminderEnabled || !refreshed.isEnabled || !refreshed.isInFlow || !refreshed.currentTask) {
+      stopBreakReminder();
+      return;
+    }
+    if (typeof refreshed.reminderExpectedEndTime === 'number' && Number.isFinite(refreshed.reminderExpectedEndTime)) {
+      expectedEndTimeForAlarms = refreshed.reminderExpectedEndTime;
+    }
   }
 
-  scheduleBreakReminderAlarms(expectedEndTime);
+  scheduleBreakReminderAlarms(expectedEndTimeForAlarms);
   updateBadgeWithTimerDisplay();
 }
 

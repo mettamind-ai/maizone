@@ -519,7 +519,8 @@ function setupWarningButtons(warningDiv) {
     }
   }, 1000);
 
-  continueBtn?.addEventListener('click', () => {
+  continueBtn?.addEventListener('click', (event) => {
+    if (!event?.isTrusted) return;
     clearInterval(countdownInterval);
     warningDiv.remove();
   });

@@ -198,9 +198,13 @@ function setupStorageReconcileListener() {
  * @returns {boolean}
  */
 function isTrustedExtensionSender(sender) {
+  const runtimeId = chrome.runtime?.id;
+  if (!runtimeId) return false;
+  if (sender?.id !== runtimeId) return false;
+
   const senderUrl = typeof sender?.url === 'string' ? sender.url : '';
-  const extensionOrigin = `chrome-extension://${chrome.runtime?.id || ''}/`;
-  return !!(senderUrl && extensionOrigin && senderUrl.startsWith(extensionOrigin));
+  const extensionOrigin = `chrome-extension://${runtimeId}/`;
+  return !!(senderUrl && senderUrl.startsWith(extensionOrigin));
 }
 
 /**
