@@ -151,32 +151,47 @@ function normalizeTask(value, fallback) {
   return trimmed.length > MAX_TASK_LENGTH ? trimmed.slice(0, MAX_TASK_LENGTH) : trimmed;
 }
 
-/***** INVARIANTS *****/
+/***** VALIDITY + POLICY (SEPARATED) *****/
 
 /**
- * Enforce các invariants để tránh state mâu thuẫn.
+ * Apply product policy decisions to state (separate from validity invariants).
+ * NOTE: Keep behavior identical to previous `enforceStateInvariants`.
  * @param {Object} nextState - State sau merge/sanitize
+ * @returns {Object} State sau khi áp policy
+ */
+function applyStatePolicy(nextState) {
+  const s = { ...nextState };
+
+  // Policy: disabling the extension wipes the current session.
+  if (!s.isEnabled) {
+    s.isInFlow = false;
+    s.currentTask = '';
+    s.breakReminderEnabled = false;
+    s.reminderStartTime = null;
+    s.reminderInterval = null;
+    s.reminderExpectedEndTime = null;
+  }
+
+  return s;
+}
+
+/**
+ * Enforce validity invariants to keep state consistent.
+ * @param {Object} nextState - State sau merge/sanitize/policy
  * @returns {Object} State đã được chỉnh theo invariants
  */
-function enforceStateInvariants(nextState) {
+function enforceStateValidity(nextState) {
   const sanitized = { ...nextState };
 
   // Ensure task is always a string.
   if (!sanitized.currentTask) sanitized.currentTask = '';
 
-  if (!sanitized.isEnabled) {
-    sanitized.isInFlow = false;
-    sanitized.currentTask = '';
-    sanitized.breakReminderEnabled = false;
-    sanitized.reminderStartTime = null;
-    sanitized.reminderInterval = null;
-    sanitized.reminderExpectedEndTime = null;
-  }
-
+  // Validity: in-flow requires a non-empty task.
   if (sanitized.isInFlow && !sanitized.currentTask) {
     sanitized.isInFlow = false;
   }
 
+  // Validity: no flow => no timer.
   if (!sanitized.isInFlow || !sanitized.currentTask) {
     sanitized.isInFlow = false;
     sanitized.breakReminderEnabled = false;
@@ -186,6 +201,15 @@ function enforceStateInvariants(nextState) {
   }
 
   return sanitized;
+}
+
+/**
+ * Apply policy + validity invariants (compat wrapper).
+ * @param {Object} nextState - State sau merge/sanitize
+ * @returns {Object} State đã được chỉnh theo policy + invariants
+ */
+function enforceStateInvariants(nextState) {
+  return enforceStateValidity(applyStatePolicy(nextState));
 }
 
 /***** PURE TRANSITIONS *****/

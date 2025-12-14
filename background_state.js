@@ -18,6 +18,40 @@ let hasInitialized = false;
 // Serialize state updates to avoid race conditions (popup + alarms + webNavigation).
 let updateChain = Promise.resolve();
 
+/***** INTERNAL SUBSCRIBERS (SERVICE WORKER) *****/
+
+const stateDeltaSubscribers = new Set();
+
+/**
+ * Subscribe to state delta updates (internal to the service worker only).
+ * @param {Function} fn - Subscriber (nextState, delta)
+ * @returns {Function} Unsubscribe function
+ */
+export function onStateDelta(fn) {
+  if (typeof fn !== 'function') return () => {};
+  stateDeltaSubscribers.add(fn);
+  return () => stateDeltaSubscribers.delete(fn);
+}
+
+/**
+ * Notify internal subscribers about a state delta.
+ * @param {Object} nextState - Next full state (snapshot)
+ * @param {Object} delta - Delta object
+ * @returns {void}
+ */
+function notifyStateDeltaSubscribers(nextState, delta) {
+  if (!delta || typeof delta !== 'object' || !Object.keys(delta).length) return;
+
+  const snapshot = nextState && typeof nextState === 'object' ? { ...nextState } : getState();
+  stateDeltaSubscribers.forEach((fn) => {
+    try {
+      fn(snapshot, delta);
+    } catch (error) {
+      console.error('🌸🌸🌸 Error in state subscriber:', error);
+    }
+  });
+}
+
 /***** INITIALIZATION (MV3-SAFE) *****/
 
 let hasRegisteredStorageReconcile = false;
@@ -85,6 +119,7 @@ function setupStorageReconcileListener() {
         // Persist any derived/sanitized changes so storage stays canonical/consistent.
         await new Promise((resolve) => chrome.storage.local.set(delta, () => resolve()));
 
+        notifyStateDeltaSubscribers(state, delta);
         broadcastStateDelta(delta);
       })
       .catch((error) => {
@@ -230,6 +265,7 @@ export async function updateState(updates) {
       await new Promise((resolve) => chrome.storage.local.set(delta, () => resolve()));
 
       // Broadcast delta update to other parts of the extension
+      notifyStateDeltaSubscribers(state, delta);
       broadcastStateDelta(delta);
 
       return true;

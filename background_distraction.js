@@ -5,7 +5,7 @@
  * @feature f04 - Deep Work Mode (integration part)
  */
 
-import { ensureInitialized, getState } from './background_state.js';
+import { ensureInitialized, getState, onStateDelta } from './background_state.js';
 import { sendMessageToTabSafely } from './messaging.js';
 import { messageActions } from './actions.js';
 
@@ -13,6 +13,8 @@ import { messageActions } from './actions.js';
 
 const WARNING_COOLDOWN_MS = 4000;
 const lastWarningByTabId = new Map();
+
+let unsubscribeStateDelta = null;
 
 /**
  * Convert URL to a safe hostname for logs (privacy-first).
@@ -108,11 +110,23 @@ function shouldSendWarning(tabId, url, modeKey = '') {
 }
 
 /**
+ * Subscribe to internal state updates (service worker).
+ * @returns {void}
+ */
+function setupInternalStateSubscription() {
+  if (unsubscribeStateDelta) return;
+  unsubscribeStateDelta = onStateDelta((nextState, delta) => {
+    handleStateUpdated(delta);
+  });
+}
+
+/**
  * Initialize distraction blocking if enabled
  */
 export function initDistraction() {
   setupMessageListeners();
   setupTabLifecycleCleanup();
+  setupInternalStateSubscription();
   syncDistractionBlocking();
 }
 
@@ -140,10 +154,6 @@ function setupMessageListeners() {
         sendResponse({ success: false, error: 'No tab to close' });
       }
       return true;
-    }
-    else if (message.action === messageActions.stateUpdated) {
-      handleStateUpdated(message.delta || message.state);
-      return false;
     }
     return false;
   });

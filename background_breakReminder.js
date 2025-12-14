@@ -5,7 +5,7 @@
  * @feature f04 - Deep Work Mode (timer integration)
  */
 
-import { ensureInitialized, getState, updateState } from './background_state.js';
+import { ensureInitialized, getState, onStateDelta, updateState } from './background_state.js';
 import { BREAK_REMINDER_INTERVAL, BREAK_REMINDER_MESSAGES } from './constants.js';
 import { messageActions } from './actions.js';
 
@@ -13,6 +13,8 @@ import { messageActions } from './actions.js';
 
 const BREAK_REMINDER_END_ALARM = 'maizone_breakReminderEnd';
 const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
+
+let unsubscribeStateDelta = null;
 
 /***** INITIALIZATION *****/
 
@@ -23,12 +25,26 @@ const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
 export function initBreakReminder() {
   setupMessageListeners();
   setupAlarmListeners();
+  setupInternalStateSubscription();
   ensureInitialized()
     .then(() => initializeBreakReminderIfEnabled())
     .catch((error) => {
       console.error('🌸🌸🌸 Error initializing break reminder:', error);
       initializeBreakReminderIfEnabled();
     });
+}
+
+/***** INTERNAL SUBSCRIPTION *****/
+
+/**
+ * Subscribe to internal state updates (service worker).
+ * @returns {void}
+ */
+function setupInternalStateSubscription() {
+  if (unsubscribeStateDelta) return;
+  unsubscribeStateDelta = onStateDelta((nextState, delta) => {
+    handleStateUpdated(delta);
+  });
 }
 
 /***** MESSAGING *****/
@@ -49,11 +65,6 @@ function setupMessageListeners() {
     if (message.action === messageActions.getBreakReminderState) {
       getBreakReminderState(sendResponse);
       return true;
-    }
-
-    if (message.action === messageActions.stateUpdated) {
-      handleStateUpdated(message.delta || message.state);
-      return false;
     }
 
     return false;
@@ -219,26 +230,35 @@ async function initializeBreakReminderIfEnabled() {
  * @returns {void}
  */
 function updateBadgeWithTimerDisplay() {
-  const { reminderStartTime, reminderInterval, isInFlow } = getState();
+  const { breakReminderEnabled, reminderStartTime, reminderInterval, reminderExpectedEndTime, isInFlow } = getState();
 
-  if (!isInFlow || !reminderStartTime || !reminderInterval) {
+  if (!isInFlow || !breakReminderEnabled) {
     chrome.action.setBadgeText({ text: '' });
     return;
   }
 
-  const now = Date.now();
-  const elapsed = now - reminderStartTime;
-  const remaining = reminderInterval - elapsed;
+  let expectedEndTime = reminderExpectedEndTime;
+  if (typeof expectedEndTime !== 'number' || !Number.isFinite(expectedEndTime)) {
+    if (typeof reminderStartTime !== 'number' || !Number.isFinite(reminderStartTime)) {
+      chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+    if (typeof reminderInterval !== 'number' || !Number.isFinite(reminderInterval)) {
+      chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+    expectedEndTime = reminderStartTime + reminderInterval;
+  }
 
-  if (remaining <= 0) {
-    chrome.action.setBadgeText({ text: '00:00' });
+  const remainingMs = expectedEndTime - Date.now();
+  if (remainingMs <= 0) {
+    chrome.action.setBadgeText({ text: '00' });
     return;
   }
 
-  const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
-  const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
-
-  chrome.action.setBadgeText({ text: `${minutes}:${seconds}` });
+  // MV3 badge tick runs by minute; keep badge consistent by showing minutes only.
+  const remainingMinutes = Math.ceil(remainingMs / 60000);
+  chrome.action.setBadgeText({ text: String(remainingMinutes).padStart(2, '0') });
 }
 
 /**
@@ -373,7 +393,7 @@ function resetBreakReminder(data, sendResponse) {
           return;
         }
 
-        console.log('🌸 Resetting break reminder timer with task:', task);
+        console.log('🌸 Resetting break reminder timer');
 
         stopBreakReminder();
 
