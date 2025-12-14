@@ -6,7 +6,7 @@
  * @feature f06 - ClipMD (Clipboard to Markdown)
  */
 
-import { sendMessageSafely, sendMessageToTabSafely } from './messaging.js';
+import { sendMessageSafely } from './messaging.js';
 import { getStateSafely, updateStateSafely } from './state_helpers.js';
 import { messageActions } from './actions.js';
 
@@ -73,15 +73,6 @@ function initializePopup() {
  ******************************************************************************/
 
 /**
- * Sleep helper (popup scope).
- * @param {number} ms - Milliseconds
- * @returns {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
  * Start ClipMD pick mode as soon as the popup opens (best-effort).
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @returns {void}
@@ -90,39 +81,17 @@ function startClipmdOnPopupOpen() {
   // Fire-and-forget: popup may close quickly; ClipMD lives in the tab.
   (async () => {
     try {
-      const tabs = await new Promise((resolve) => {
-        try {
-          chrome.tabs.query({ active: true, currentWindow: true }, (result) => resolve(result || []));
-        } catch {
-          resolve([]);
-        }
-      });
+      const reply = await sendMessageSafely(
+        { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'popupOpen' } },
+        { timeoutMs: 1200 }
+      );
 
-      const tab = tabs?.[0];
-      const tabId = tab?.id;
-      const url = typeof tab?.url === 'string' ? tab.url : '';
+      if (reply?.success) return;
 
-      if (typeof tabId !== 'number') return;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) return;
-
-      // Retry a few times to handle "page still loading" where content script isn't ready yet.
-      const maxAttempts = 6;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const reply = await sendMessageToTabSafely(
-          tabId,
-          { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'popup' } },
-          { timeoutMs: 800 }
-        );
-
-        if (reply?.received) return;
-        await sleep(250 + attempt * 250);
-      }
-
-      console.warn('🌸🌸🌸 ClipMD quick start failed (no receiver)');
-      if (statusText) {
-        statusText.textContent = 'Mai chưa bật được ClipMD trên tab này. Thử reload trang rồi click icon Mai lại nhé.';
-        setTimeout(() => updateCurrentStatus(), 2500);
-      }
+      console.warn('🌸🌸🌸 ClipMD quick start failed');
+      if (!statusText) return;
+      statusText.textContent = 'Mai chưa bật được ClipMD trên tab này. Hãy mở trang http/https rồi thử lại nhé.';
+      setTimeout(() => updateCurrentStatus(), 2500);
     } catch (error) {
       console.warn('🌸🌸🌸 ClipMD quick start error:', error);
     }

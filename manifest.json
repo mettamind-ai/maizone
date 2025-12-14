@@ -21,6 +21,8 @@
     "webNavigation",
     "notifications",
     "tabs",
+    "scripting",
+    "debugger",
     "offscreen",
     "clipboardWrite"
   ],

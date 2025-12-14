@@ -380,9 +380,20 @@ function handleClipmdHotkey(event) {
   const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
   if (key !== 'q') return false;
 
-  startClipmdPickMode();
   event.preventDefault?.();
   event.stopPropagation?.();
+
+  // Prefer the "native" inspect overlay flow (background), fallback to in-page picker.
+  (async () => {
+    const reply = await sendMessageSafely(
+      { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'contentHotkey' } },
+      { timeoutMs: 1200 }
+    );
+
+    if (reply?.success) return;
+    startClipmdPickMode();
+  })();
+
   return true;
 }
 

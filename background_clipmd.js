@@ -18,6 +18,138 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/***** INSPECT PICKER (CDP via chrome.debugger) *****/
+
+const CLIPMD_DEBUGGER_PROTOCOL_VERSION = '1.3';
+const CLIPMD_INSPECT_TIMEOUT_MS = 45_000;
+
+const CLIPMD_HIGHLIGHT_CONFIG = Object.freeze({
+  borderColor: { r: 255, g: 143, b: 171, a: 0.9 }, // Mai pink
+  contentColor: { r: 255, g: 143, b: 171, a: 0.35 },
+  showInfo: true
+});
+
+const clipmdSessions = new Map();
+let hasRegisteredClipmdDebuggerListeners = false;
+
+/**
+ * Send a CDP command through chrome.debugger.
+ * @param {{tabId:number}} debuggee - Debuggee object
+ * @param {string} method - CDP method
+ * @param {Object} [params] - CDP params
+ * @returns {Promise<any>}
+ */
+function sendDebuggerCommand(debuggee, method, params = {}) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.debugger.sendCommand(debuggee, method, params, (result) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message || String(lastError)));
+          return;
+        }
+        resolve(result);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Attach chrome.debugger to a tab.
+ * @param {{tabId:number}} debuggee - Debuggee
+ * @returns {Promise<void>}
+ */
+function attachDebugger(debuggee) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.debugger.attach(debuggee, CLIPMD_DEBUGGER_PROTOCOL_VERSION, () => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message || String(lastError)));
+          return;
+        }
+        resolve();
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Detach chrome.debugger safely.
+ * @param {{tabId:number}} debuggee - Debuggee
+ * @returns {Promise<void>}
+ */
+async function detachDebugger(debuggee) {
+  try {
+    await sendDebuggerCommand(debuggee, 'Overlay.setInspectMode', { mode: 'none' });
+  } catch {
+    // ignore
+  }
+
+  await new Promise((resolve) => {
+    try {
+      chrome.debugger.detach(debuggee, () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Remove a session and detach the debugger.
+ * @param {number} tabId - Tab id
+ * @returns {Promise<void>}
+ */
+async function cleanupClipmdSession(tabId) {
+  const session = clipmdSessions.get(tabId);
+  if (!session) return;
+  clipmdSessions.delete(tabId);
+
+  clearTimeout(session.timeoutId);
+
+  try {
+    await detachDebugger(session.debuggee);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Write text to clipboard within the tab (best-effort).
+ * @param {number} tabId - Target tab
+ * @param {string} text - Clipboard text
+ * @returns {Promise<boolean>} True if executed without runtime error
+ */
+async function writeTextToTab(tabId, text) {
+  if (!chrome?.scripting?.executeScript) return false;
+  const content = typeof text === 'string' ? text : '';
+  if (!content) return false;
+
+  return await new Promise((resolve) => {
+    try {
+      chrome.scripting.executeScript(
+        {
+          target: { tabId },
+          args: [content],
+          func: async (clipboardText) => {
+            await navigator.clipboard.writeText(clipboardText);
+          }
+        },
+        () => {
+          const lastError = chrome.runtime.lastError;
+          resolve(!lastError);
+        }
+      );
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 /***** OFFSCREEN CONVERSION *****/
 
 const CLIPMD_OFFSCREEN_URL = 'clipmd_offscreen.html';
@@ -73,27 +205,63 @@ async function convertHtmlToMarkdown(html) {
   });
 }
 
-/***** COMMAND ENTRYPOINT *****/
+/***** PICKER ENTRYPOINTS *****/
 
 /**
- * Start ClipMD pick mode on the active tab.
- * @returns {Promise<boolean>} True if request was sent
+ * Start ClipMD pick mode using the native inspect overlay (debugger/CDP).
+ * @param {number} tabId - Target tab id
+ * @returns {Promise<boolean>} True if inspect mode was started
  */
-export async function startClipmdMarkdownPicker() {
+async function startClipmdMarkdownPickerViaDebugger(tabId) {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tabId = tab?.id;
-    const url = typeof tab?.url === 'string' ? tab.url : '';
-
+    if (!chrome?.debugger?.attach || !chrome?.debugger?.sendCommand) return false;
     if (typeof tabId !== 'number') return false;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+    if (clipmdSessions.has(tabId)) return true;
+
+    const ready = await ensureClipmdOffscreen();
+    if (!ready) return false;
+
+    const debuggee = { tabId };
+    await attachDebugger(debuggee);
+
+    await sendDebuggerCommand(debuggee, 'DOM.enable');
+    await sendDebuggerCommand(debuggee, 'Overlay.enable');
+
+    const timeoutId = setTimeout(() => {
+      cleanupClipmdSession(tabId).catch(() => {});
+    }, CLIPMD_INSPECT_TIMEOUT_MS);
+
+    clipmdSessions.set(tabId, { debuggee, mode: 'markdown', timeoutId });
+
+    await sendDebuggerCommand(debuggee, 'Overlay.setInspectMode', {
+      mode: 'searchForNode',
+      highlightConfig: CLIPMD_HIGHLIGHT_CONFIG
+    });
+
+    return true;
+  } catch (error) {
+    console.error('🌸🌸🌸 Error starting ClipMD inspect mode:', error);
+    if (typeof tabId === 'number') await cleanupClipmdSession(tabId);
+    return false;
+  }
+}
+
+/**
+ * Start ClipMD pick mode using the legacy content-script click capture (fallback).
+ * @param {number} tabId - Target tab id
+ * @param {string} source - Trigger source for logs
+ * @returns {Promise<boolean>} True if receiver acknowledged
+ */
+async function startClipmdMarkdownPickerViaContentScript(tabId, source) {
+  try {
+    if (typeof tabId !== 'number') return false;
 
     // Retry: the content script may not be ready yet (run_at=document_idle).
     const maxAttempts = 6;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const reply = await sendMessageToTabSafely(
         tabId,
-        { action: messageActions.clipmdStart, data: { mode: 'markdown', source: 'command', attempt } },
+        { action: messageActions.clipmdStart, data: { mode: 'markdown', source, attempt } },
         { timeoutMs: 900 }
       );
 
@@ -102,6 +270,48 @@ export async function startClipmdMarkdownPicker() {
     }
 
     return false;
+  } catch (error) {
+    console.error('🌸🌸🌸 Error starting ClipMD (content script):', error);
+    return false;
+  }
+}
+
+/**
+ * Start ClipMD picker on a target tab (debugger first, fallback to content script).
+ * @param {Object} [options]
+ * @param {number} [options.tabId] - Optional tabId. If omitted, use active tab.
+ * @param {string} [options.source='unknown'] - Trigger source for logs
+ * @returns {Promise<boolean>} True if started
+ */
+export async function startClipmdMarkdownPicker({ tabId, source = 'unknown' } = {}) {
+  try {
+    const tab = await new Promise((resolve) => {
+      try {
+        if (typeof tabId === 'number') {
+          chrome.tabs.get(tabId, (t) => {
+            const lastError = chrome.runtime.lastError;
+            if (lastError) resolve(null);
+            else resolve(t || null);
+          });
+          return;
+        }
+
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs?.[0] || null));
+      } catch {
+        resolve(null);
+      }
+    });
+
+    const targetTabId = tab?.id;
+    const url = typeof tab?.url === 'string' ? tab.url : '';
+
+    if (typeof targetTabId !== 'number') return false;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+
+    const okDebugger = await startClipmdMarkdownPickerViaDebugger(targetTabId);
+    if (okDebugger) return true;
+
+    return await startClipmdMarkdownPickerViaContentScript(targetTabId, source);
   } catch (error) {
     console.error('🌸🌸🌸 Error starting ClipMD picker:', error);
     return false;
@@ -115,8 +325,70 @@ export async function startClipmdMarkdownPicker() {
  * @returns {void}
  */
 export function initClipmd() {
+  if (chrome?.debugger?.onEvent && !hasRegisteredClipmdDebuggerListeners) {
+    hasRegisteredClipmdDebuggerListeners = true;
+
+    chrome.debugger.onEvent.addListener((source, method, params) => {
+      if (method !== 'Overlay.inspectNodeRequested') return;
+      const backendNodeId = params?.backendNodeId;
+      const tabId = source?.tabId;
+      if (typeof tabId !== 'number' || typeof backendNodeId !== 'number') return;
+
+      const session = clipmdSessions.get(tabId);
+      if (!session) return;
+
+      (async () => {
+        try {
+          const { outerHTML } = await sendDebuggerCommand(session.debuggee, 'DOM.getOuterHTML', { backendNodeId });
+          const html = typeof outerHTML === 'string' ? outerHTML : '';
+          if (!html) throw new Error('Empty outerHTML');
+
+          const result = await convertHtmlToMarkdown(html);
+          if (!result?.ok) throw new Error(result?.error || 'Convert failed');
+
+          const markdown = typeof result.markdown === 'string' ? result.markdown : '';
+          if (!markdown) throw new Error('Empty markdown');
+
+          const wrote = await writeTextToTab(tabId, markdown);
+          if (!wrote) throw new Error('Clipboard write failed');
+        } catch (error) {
+          console.error('🌸🌸🌸 ClipMD inspect failed:', error);
+        } finally {
+          await cleanupClipmdSession(tabId);
+        }
+      })();
+    });
+
+    chrome.debugger.onDetach.addListener((source) => {
+      const tabId = source?.tabId;
+      if (typeof tabId !== 'number') return;
+      const session = clipmdSessions.get(tabId);
+      if (!session) return;
+      clearTimeout(session.timeoutId);
+      clipmdSessions.delete(tabId);
+    });
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message !== 'object' || typeof message.action !== 'string') return false;
+
+    if (message.action === messageActions.clipmdStart) {
+      (async () => {
+        const mode = typeof message?.data?.mode === 'string' ? message.data.mode : 'markdown';
+        if (mode !== 'markdown') return { success: false, error: 'Unsupported mode' };
+
+        const senderTabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : undefined;
+        const ok = await startClipmdMarkdownPicker({ tabId: senderTabId, source: 'runtime' });
+        return { success: ok };
+      })()
+        .then((response) => sendResponse(response))
+        .catch((error) => {
+          console.error('🌸🌸🌸 Error starting ClipMD:', error);
+          sendResponse({ success: false, error: 'Internal error' });
+        });
+
+      return true;
+    }
 
     if (message.action !== messageActions.clipmdConvertMarkdown) return false;
 
