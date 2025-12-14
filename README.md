@@ -1,3 +1,10 @@
+## Tính năng nổi bật
+
+- **Chặn sao nhãng (f01)**: cảnh báo/chặn truy cập các trang web dễ gây mất tập trung.
+- **Deep Work 40 phút (f04 + f03)**: nhập 1 task → vào flow → đếm ngược + nhắc nghỉ; badge hiển thị `mm:ss`.
+- **ClipMD (f06)**: **Alt + Q** hoặc **click icon MaiZone** → chọn element trên trang → copy Markdown vào clipboard.
+- **ChatGPT Zen Mode (f07)**: trên `chatgpt.com`, **Alt + Z** ẩn/hiện UI; **Alt + S** dán prompt mẫu nhanh.
+
 ## Hướng dẫn cài đặt browser ext
 <img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />
 
@@ -39,8 +46,8 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |<!--r1 c1-->f00|<!--r1 c2-->Text Input Detection     |<!--r1 c3-->Phát hiện và theo dõi người dùng nhập liệu      |<!--r1 c4-->`content.js`   |<!--r1 c5-->`handleFocusIn()`, `handleKeyDown()`  | — |<!--r1 c7-->✅ Done |
 |<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `distraction_matcher.js`, `content.js` |<!--r2 c5-->`getDistractionMatch()`, `isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
 |<!--r3 c1-->f02|<!--r3 c2-->AI Text Prediction (Removed) |<!--r3 c3-->Đã loại bỏ (không dùng LLM key)                 |<!--r3 c4-->— |<!--r3 c5-->— | — |<!--r3 c7-->🚫 Removed |
-|<!--r4 c1-->f03|<!--r4 c2-->Break Reminder           |<!--r4 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r4 c4-->`background_breakReminder.js`, `popup.js` |<!--r4 c5-->`sendBreakReminder()`, `startBreakReminder()` | **Alt + A** |<!--r4 c7-->✅ Done |
-|<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_breakReminder.js`, `background_distraction.js`, `distraction_matcher.js`, `popup.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter** |<!--r5 c7-->✅ Done |
+|<!--r4 c1-->f03|<!--r4 c2-->Break Reminder           |<!--r4 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r4 c4-->`background_breakReminder.js`, `popup.js`, `clipmd_offscreen.js` |<!--r4 c5-->`sendBreakReminder()`, `startBreakReminder()`, `updateBadgeWithTimerDisplay()` | **Alt + A** |<!--r4 c7-->✅ Done |
+|<!--r5 c1-->f04|<!--r5 c2-->Deep Work Mode           |<!--r5 c3-->Tập trung sâu vào một task 40"                  |<!--r5 c4-->`background_breakReminder.js`, `background_distraction.js`, `distraction_matcher.js`, `popup.js`, `clipmd_offscreen.js`  |<!--r5 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter**, **Huy hiệu mm:ss** |<!--r5 c7-->✅ Done |
 |<!--r6 c1-->f05|<!--r6 c2-->State Management         |<!--r6 c3-->Đồng bộ hóa trạng thái toàn extension           |<!--r6 c4-->`background_state.js`, `state_core.js`, `state_contract.js`, `state_helpers.js`, `actions.js`, `actions_global.js`, `messaging.js` |<!--r6 c5-->`ensureInitialized()`, `getState()`, `updateState()`, `sanitizeStoredState()` | — |<!--r6 c7-->✅ Done   |
 |<!--r7 c1-->f06|<!--r7 c2-->ClipMD                  |<!--r7 c3-->Copy Markdown bằng cách chọn element trên trang |<!--r7 c4-->`background_clipmd.js`, `clipmd_offscreen.js`, `clipmd_offscreen.html`, `turndown.js`, `content.js`, `popup.js` |<!--r7 c5-->`startClipmdMarkdownPicker()`, `startClipmdPickMode()` | **Alt + Q**, **Click icon Mai** |<!--r7 c7-->🧪 Alpha |
 |<!--r8 c1-->f07|<!--r8 c2-->ChatGPT Zen Hotkeys     |<!--r8 c3-->Ẩn/hiện UI + dán prompt mẫu trên chatgpt.com    |<!--r8 c4-->`content.js`   |<!--r8 c5-->`handleChatgptHotkeys()`, `toggleChatgptZenMode()` | **Alt + Z**, **Alt + S** |<!--r8 c7-->🧪 Alpha |
@@ -96,3 +103,10 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 - Bấm **Alt + Q** để bật chế độ chọn vùng (inspect overlay), sau đó **click vào element** bạn muốn copy → Mai sẽ copy Markdown vào clipboard.
 - Hoặc **click icon MaiZone (🌸)** để mở popup, đồng thời Mai cũng tự bật ClipMD cho tab hiện tại → rồi **click vào element** để copy.
+
+
+## Huy hiệu thời gian (Deep Work)
+
+- Khi đang Deep Work, badge trên icon MaiZone hiển thị thời gian còn lại dạng `mm:ss` và cập nhật khoảng mỗi 1 giây.
+- Cơ chế: tick badge trong `chrome.offscreen` để tránh wake MV3 service worker liên tục (tiết kiệm pin/CPU).
+- Nếu trình duyệt không hỗ trợ `chrome.offscreen`, do MV3 service worker có thể “ngủ”, badge sẽ fallback cập nhật theo phút (bằng `chrome.alarms`).

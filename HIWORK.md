@@ -90,6 +90,14 @@ sendMessageToTabSafely(tabId, {
 4. `clipmd_offscreen.js` convert HTML → Markdown (Turndown).
 5. Background ghi Markdown vào clipboard (trong context của tab).
 
+## Huy hiệu thời gian (f03/f04) — mm:ss trên icon
+
+- **Vì sao cần?** MV3 Service Worker có thể ngủ; không nên chạy `setInterval` mỗi 1 giây trong SW vì sẽ wake liên tục (tốn pin/CPU).
+- **Cách làm**: Dùng `chrome.alarms` để hẹn giờ kết thúc (end alarm) và có fallback tick theo phút cho badge.
+- **High-precision (mỗi giây)**: Khi đang Deep Work, Mai tận dụng `chrome.offscreen` (cùng offscreen với ClipMD) để tick badge mỗi 1 giây; ticker tự dừng khi Deep Work kết thúc.
+- **Triển khai**: `background_breakReminder.js` đảm bảo offscreen doc tồn tại; `clipmd_offscreen.js` đọc state từ `chrome.storage.local` và cập nhật badge (không log nội dung task).
+- **Vì sao fallback theo phút?** Không có `offscreen` thì chỉ còn cách wake MV3 service worker theo lịch (`chrome.alarms`) nên độ mượt bị giới hạn.
+
 ## Tổng Quan Kiến Trúc
 
 ```
