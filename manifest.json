@@ -27,7 +27,7 @@
   "commands": {
     "test-break-reminder": {
       "suggested_key": {
-        "default": "Alt+B"
+        "default": "Alt+A"
       },
       "description": "Test break reminder notification"
     }
