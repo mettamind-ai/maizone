@@ -16,6 +16,35 @@ const BREAK_REMINDER_BADGE_ALARM = 'maizone_breakReminderBadgeTick';
 
 let unsubscribeStateDelta = null;
 
+/***** OFFSCREEN (BADGE HIGH-PRECISION) *****/
+
+const CLIPMD_OFFSCREEN_URL = 'clipmd_offscreen.html';
+
+/**
+ * Ensure offscreen document exists (used for ClipMD conversion + badge ticking).
+ * @returns {Promise<boolean>} True if offscreen is ready
+ */
+async function ensureOffscreenDocument() {
+  try {
+    if (!chrome?.offscreen?.createDocument) return false;
+
+    const hasDocument = await chrome.offscreen.hasDocument?.();
+    if (hasDocument) return true;
+
+    await chrome.offscreen.createDocument({
+      url: CLIPMD_OFFSCREEN_URL,
+      reasons: [chrome.offscreen.Reason.CLIPBOARD],
+      justification: 'Convert selected element HTML to Markdown and update Deep Work badge timer'
+    });
+
+    return true;
+  } catch (error) {
+    const message = error?.message || String(error);
+    if (/existing/i.test(message)) return true;
+    return false;
+  }
+}
+
 /***** TRUSTED SENDER (DEFENSE-IN-DEPTH) *****/
 
 /**
@@ -163,6 +192,7 @@ async function handleAlarm(alarm) {
   await ensureInitialized();
 
   if (alarm.name === BREAK_REMINDER_BADGE_ALARM) {
+    // Fallback tick only (offscreen handles high-precision when available).
     updateBadgeWithTimerDisplay();
     return;
   }
@@ -175,20 +205,29 @@ async function handleAlarm(alarm) {
 /**
  * Schedule end + badge alarms for the current session.
  * @param {number} expectedEndTime - Epoch ms timestamp
- * @returns {void}
+ * @returns {Promise<boolean>} True if high-precision badge is handled by offscreen
  */
-function scheduleBreakReminderAlarms(expectedEndTime) {
+async function scheduleBreakReminderAlarms(expectedEndTime) {
   if (!chrome?.alarms) return;
   if (typeof expectedEndTime !== 'number' || !Number.isFinite(expectedEndTime)) return;
 
   try {
     chrome.alarms.create(BREAK_REMINDER_END_ALARM, { when: expectedEndTime });
 
-    // Keep badge roughly in sync without relying on long-lived timers.
+    const hasOffscreen = await ensureOffscreenDocument();
+    if (hasOffscreen) {
+      // Offscreen can tick badge every second without waking the SW constantly.
+      chrome.alarms.clear(BREAK_REMINDER_BADGE_ALARM);
+      return true;
+    }
+
+    // Fallback: keep badge roughly in sync without relying on long-lived timers.
     chrome.alarms.create(BREAK_REMINDER_BADGE_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
   } catch (error) {
     console.error('🌸🌸🌸 Error scheduling break reminder alarms:', error);
   }
+
+  return false;
 }
 
 /**
@@ -260,8 +299,8 @@ async function initializeBreakReminderIfEnabled() {
     }
   }
 
-  scheduleBreakReminderAlarms(expectedEndTimeForAlarms);
-  updateBadgeWithTimerDisplay();
+  const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(expectedEndTimeForAlarms);
+  if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
 }
 
 /**
@@ -327,8 +366,8 @@ async function startBreakReminder(customInterval) {
     reminderExpectedEndTime
   });
 
-  scheduleBreakReminderAlarms(reminderExpectedEndTime);
-  updateBadgeWithTimerDisplay();
+  const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+  if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
 }
 
 /**
@@ -351,8 +390,8 @@ async function handleBreakReminderEnd() {
     now < reminderExpectedEndTime
   ) {
     // Alarm can fire early/late; reschedule if early.
-    scheduleBreakReminderAlarms(reminderExpectedEndTime);
-    updateBadgeWithTimerDisplay();
+    const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+    if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
     return;
   }
 
@@ -449,8 +488,8 @@ function resetBreakReminder(data, sendResponse) {
           reminderExpectedEndTime
         });
 
-        scheduleBreakReminderAlarms(reminderExpectedEndTime);
-        updateBadgeWithTimerDisplay();
+        const hasHighPrecisionBadge = await scheduleBreakReminderAlarms(reminderExpectedEndTime);
+        if (!hasHighPrecisionBadge) updateBadgeWithTimerDisplay();
 
         sendResponse?.({ success: true });
       } catch (error) {

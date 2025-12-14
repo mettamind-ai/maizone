@@ -357,6 +357,11 @@ function updateCountdownTimer() {
     .then((state) => {
       if (!state || !state.enabled || !state.startTime) {
         breakReminderCountdown.textContent = '(40:00)';
+        try {
+          chrome.action.setBadgeText({ text: '' });
+        } catch {
+          // ignore
+        }
         return;
       }
       
@@ -366,13 +371,26 @@ function updateCountdownTimer() {
       
       if (remaining <= 0) {
         breakReminderCountdown.textContent = '(00:00)';
+        try {
+          chrome.action.setBadgeText({ text: '00:00' });
+        } catch {
+          // ignore
+        }
         return;
       }
       
       const minutes = Math.floor(remaining / 60000).toString().padStart(2, '0');
       const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
       
-      breakReminderCountdown.textContent = `(${minutes}:${seconds})`;
+      const text = `${minutes}:${seconds}`;
+      breakReminderCountdown.textContent = `(${text})`;
+
+      // Keep badge in sync while popup is open (helps browsers that throttle alarms).
+      try {
+        chrome.action.setBadgeText({ text });
+      } catch {
+        // ignore
+      }
     })
     .catch(error => {
       console.error('🌸🌸🌸 Error updating countdown:', error);
