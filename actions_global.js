@@ -2,6 +2,7 @@
  * MaiZone Browser Extension
  * Message Actions (Classic): Global action names for classic scripts (content scripts)
  * @feature f05 - State Management
+ * @feature f08 - Mindfulness Reminders
  */
 
 /***** ACTION NAMES (GLOBAL) *****/
@@ -12,6 +13,7 @@ globalThis.MAIZONE_ACTIONS = Object.freeze({
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
+  mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
   clipmdConvertMarkdown: 'clipmdConvertMarkdown',
   resetBreakReminder: 'resetBreakReminder',

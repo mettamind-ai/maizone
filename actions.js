@@ -2,6 +2,7 @@
  * MaiZone Browser Extension
  * Message Actions: Centralized action names for runtime messaging
  * @feature f05 - State Management
+ * @feature f08 - Mindfulness Reminders
  */
 
 /***** ACTION NAMES *****/
@@ -11,6 +12,7 @@ export const messageActions = Object.freeze({
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
+  mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
   clipmdConvertMarkdown: 'clipmdConvertMarkdown',
   resetBreakReminder: 'resetBreakReminder',

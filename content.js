@@ -7,6 +7,7 @@
  * @feature f04c - Deep Work Mode Integration
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
+ * @feature f08 - Mindfulness Reminders (toast)
  */
 
 /******************************************************************************
@@ -73,13 +74,7 @@ const TYPING_INTERVAL = 500; // Typing detection interval (ms)
 const CHATGPT_HOST_SUFFIX = 'chatgpt.com';
 const CHATGPT_ZEN_STORAGE_KEY = 'chatgptZenMode';
 const CHATGPT_ZEN_SELECTORS = Object.freeze(['.cursor-pointer', '#page-header', '#thread-bottom', '#full_editor']);
-const CHATGPT_TEMPLATE = `
-You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You encourage the user to complete needed tasks themselves, unless the user explicitly asks for it to be done for them. Unless explicitly requested otherwise. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing. You should be concise, direct, and without unnecessary explanations or summaries. Additionally, avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand. Trình bày output text dưới dạng văn xuôi, dễ hiểu, ít gạch đầu dòng.
-
-Các lệnh tắt cần ghi nhớ:
-
-- vx: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi
-- vd: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.`;
+const CHATGPT_TEMPLATE = "You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing. You should be concise, direct, and without unnecessary explanations or summaries. Avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand. Trình bày output text dưới dạng văn xuôi, dễ hiểu, ít gạch đầu dòng. Các lệnh tắt cần ghi nhớ: `vx`: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi. `vd`: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.";
 
 // [f03] Opera badge tick fallback: keep badge updated per-second by keeping the SW active via a Port.
 const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
@@ -91,6 +86,7 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
   youtubeNavigation: 'youtubeNavigation',
   closeTab: 'closeTab',
   distractingWebsite: 'distractingWebsite',
+  mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
   clipmdConvertMarkdown: 'clipmdConvertMarkdown',
   resetBreakReminder: 'resetBreakReminder',
@@ -117,6 +113,9 @@ let isChatgptZenModeEnabled = true;
 let chatgptZenObserver = null;
 let chatgptZenApplyTimeoutId = null;
 let chatgptToastTimeoutId = null;
+let mindfulnessToastTimeoutId = null;
+let mindfulnessToastFadeTimeoutId = null;
+let mindfulnessAudioContext = null;
 
 // YouTube SPA monitoring
 let youtubeObserver = null;
@@ -837,6 +836,241 @@ function removeChatgptToast() {
 }
 
 /******************************************************************************
+ * MINDFULNESS TOAST [f08]
+ ******************************************************************************/
+
+const MINDFULNESS_TOAST_VISIBLE_MS = 10_000;
+const MINDFULNESS_TOAST_FADE_MS = 450;
+
+/**
+ * Show a gentle mindfulness toast (site-agnostic).
+ * @feature f08 - Mindfulness Reminders
+ * @param {string} text - Toast text
+ * @returns {void}
+ */
+function showMindfulnessToast(text) {
+  const message = typeof text === 'string' ? text : '';
+  if (!message) return;
+
+  ensureMindfulnessToastStyles();
+
+  let el = document.getElementById('mai-mindfulness-toast');
+  let labelEl = el?.querySelector?.('#mai-mindfulness-toast-label') || null;
+  let prefixEl = el?.querySelector?.('#mai-mindfulness-toast-prefix') || null;
+  let suffixEl = el?.querySelector?.('#mai-mindfulness-toast-suffix') || null;
+
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'mai-mindfulness-toast';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+
+    Object.assign(el.style, {
+      position: 'fixed',
+      top: '18px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: '99999999',
+      maxWidth: 'min(560px, 92vw)',
+      padding: '12px 14px',
+      borderRadius: '14px',
+      backgroundColor: 'rgba(0,0,0,0.88)',
+      border: '1px solid rgba(255, 143, 171, 0.55)',
+      color: 'white',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontSize: '14px',
+      fontWeight: '600',
+      lineHeight: '1.25',
+      boxShadow: '0 14px 34px rgba(0,0,0,0.32), 0 0 0 6px rgba(255, 143, 171, 0.08)',
+      textAlign: 'center',
+      letterSpacing: '0.1px',
+      pointerEvents: 'none',
+      willChange: 'transform, opacity'
+    });
+
+    prefixEl = document.createElement('span');
+    prefixEl.id = 'mai-mindfulness-toast-prefix';
+    prefixEl.textContent = '🌸';
+    Object.assign(prefixEl.style, { marginRight: '8px' });
+
+    labelEl = document.createElement('span');
+    labelEl.id = 'mai-mindfulness-toast-label';
+    labelEl.textContent = '';
+
+    suffixEl = document.createElement('span');
+    suffixEl.id = 'mai-mindfulness-toast-suffix';
+    suffixEl.textContent = '🌸';
+    Object.assign(suffixEl.style, { marginLeft: '8px' });
+
+    el.appendChild(prefixEl);
+    el.appendChild(labelEl);
+    el.appendChild(suffixEl);
+
+    document.documentElement.appendChild(el);
+  }
+
+  // Backward compatible: if toast exists from an older version, add missing prefix/suffix.
+  if (el && !prefixEl) {
+    prefixEl = document.createElement('span');
+    prefixEl.id = 'mai-mindfulness-toast-prefix';
+    prefixEl.textContent = '🌸';
+    Object.assign(prefixEl.style, { marginRight: '8px' });
+    try {
+      el.insertBefore(prefixEl, el.firstChild);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (el && !suffixEl) {
+    suffixEl = document.createElement('span');
+    suffixEl.id = 'mai-mindfulness-toast-suffix';
+    suffixEl.textContent = '🌸';
+    Object.assign(suffixEl.style, { marginLeft: '8px' });
+    try {
+      el.appendChild(suffixEl);
+    } catch {
+      // ignore
+    }
+  }
+
+  const cleanMessage = message.replace(/^\s*🌸\s*/u, '');
+  if (labelEl) labelEl.textContent = cleanMessage;
+
+  // Ensure fade transition exists even if the element was created by an older version.
+  try {
+    el.style.transition = `opacity ${MINDFULNESS_TOAST_FADE_MS}ms ease`;
+    el.style.opacity = '1';
+  } catch {
+    // ignore
+  }
+
+  // Visual attention: restart entrance animation.
+  try {
+    el.classList.remove('mai-mindfulness-toast--show');
+    // Force reflow to restart animation.
+    el.offsetHeight;
+    el.classList.add('mai-mindfulness-toast--show');
+  } catch {
+    // ignore
+  }
+
+  // Sound (best-effort): if blocked by autoplay policies, just ignore.
+  playMindfulnessChime().catch(() => {});
+
+  clearTimeout(mindfulnessToastTimeoutId);
+  clearTimeout(mindfulnessToastFadeTimeoutId);
+
+  mindfulnessToastFadeTimeoutId = setTimeout(() => {
+    try {
+      el.style.opacity = '0';
+    } catch {
+      // ignore
+    }
+  }, MINDFULNESS_TOAST_VISIBLE_MS);
+
+  mindfulnessToastTimeoutId = setTimeout(() => {
+    removeMindfulnessToast();
+  }, MINDFULNESS_TOAST_VISIBLE_MS + MINDFULNESS_TOAST_FADE_MS);
+}
+
+/**
+ * Ensure CSS (keyframes + reduced-motion handling) exists for the mindfulness toast.
+ * @feature f08 - Mindfulness Reminders
+ * @returns {void}
+ */
+function ensureMindfulnessToastStyles() {
+  const styleId = 'mai-mindfulness-toast-style';
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    #mai-mindfulness-toast.mai-mindfulness-toast--show {
+      animation: maiMindfulnessToastIn 260ms ease-out, maiMindfulnessToastPulse 1200ms ease-in-out 2;
+    }
+
+    @keyframes maiMindfulnessToastIn {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.985); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+
+    @keyframes maiMindfulnessToastPulse {
+      0% { box-shadow: 0 14px 34px rgba(0,0,0,0.32), 0 0 0 6px rgba(255, 143, 171, 0.08); }
+      50% { box-shadow: 0 18px 44px rgba(0,0,0,0.36), 0 0 0 10px rgba(255, 143, 171, 0.14); }
+      100% { box-shadow: 0 14px 34px rgba(0,0,0,0.32), 0 0 0 6px rgba(255, 143, 171, 0.08); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #mai-mindfulness-toast.mai-mindfulness-toast--show {
+        animation: none !important;
+      }
+    }
+  `;
+
+  document.documentElement.appendChild(style);
+}
+
+/**
+ * Play a short, gentle chime (best-effort).
+ * NOTE: Some sites may block playback due to autoplay policies; we ignore failures.
+ * @feature f08 - Mindfulness Reminders
+ * @returns {Promise<boolean>} True if a chime was scheduled
+ */
+async function playMindfulnessChime() {
+  try {
+    const AudioCtx = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AudioCtx) return false;
+
+    if (!mindfulnessAudioContext) mindfulnessAudioContext = new AudioCtx();
+
+    if (mindfulnessAudioContext.state === 'suspended') {
+      await mindfulnessAudioContext.resume();
+    }
+
+    const ctx = mindfulnessAudioContext;
+    const now = ctx.currentTime;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.06, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    gain.connect(ctx.destination);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(784, now); // G5
+    osc.frequency.setValueAtTime(988, now + 0.11); // B5
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.22);
+
+    // Cleanup connections after the sound ends (avoid leaks).
+    osc.onended = () => {
+      try { osc.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Remove mindfulness toast (if any).
+ * @feature f08 - Mindfulness Reminders
+ * @returns {void}
+ */
+function removeMindfulnessToast() {
+  clearTimeout(mindfulnessToastTimeoutId);
+  mindfulnessToastTimeoutId = null;
+  clearTimeout(mindfulnessToastFadeTimeoutId);
+  mindfulnessToastFadeTimeoutId = null;
+  document.getElementById('mai-mindfulness-toast')?.remove?.();
+}
+
+/******************************************************************************
  * CONTENT ANALYSIS
  ******************************************************************************/
 
@@ -911,6 +1145,13 @@ function setCurrentElement(element) {
  * Handle messages from background script
  */
 function handleBackgroundMessages(message, sender, sendResponse) {
+  if (message?.action === messageActions.mindfulnessToast) {
+    const text = typeof message?.data?.text === 'string' ? message.data.text : '';
+    showMindfulnessToast(text);
+    sendResponse?.({ ok: true });
+    return true;
+  }
+
   if (message?.action === messageActions.stateUpdated) {
     // [f03] Opera: ensure badge ticker fallback stays in sync with background state updates.
     syncOperaBadgeTickFallback();

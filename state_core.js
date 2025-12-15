@@ -2,6 +2,7 @@
  * MaiZone Browser Extension
  * State Core: Schema + normalization + invariants (pure functions)
  * @feature f05 - State Management
+ * @feature f08 - Mindfulness Reminders
  */
 
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
@@ -13,11 +14,13 @@ export const DEFAULT_STATE = Object.freeze({
   isInFlow: false,
   blockDistractions: true,
   breakReminderEnabled: false,
+  mindfulnessReminderEnabled: false,
   distractingSites: Object.freeze([...DEFAULT_DISTRACTING_SITES]),
   deepWorkBlockedSites: Object.freeze([...DEFAULT_DEEPWORK_BLOCKED_SITES]),
   reminderStartTime: null,
   reminderInterval: null,
-  reminderExpectedEndTime: null
+  reminderExpectedEndTime: null,
+  mindfulnessLastShownAt: null
 });
 
 /**
@@ -205,13 +208,15 @@ export function sanitizeStoredState(storedState) {
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
     blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
     breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
+    mindfulnessReminderEnabled: normalizeBoolean(stored.mindfulnessReminderEnabled, base.mindfulnessReminderEnabled),
     distractingSites: normalizeDomainList(stored.distractingSites, base.distractingSites, { maxItems: MAX_SITE_LIST_ITEMS }),
     deepWorkBlockedSites: normalizeDomainList(stored.deepWorkBlockedSites, base.deepWorkBlockedSites, {
       maxItems: MAX_SITE_LIST_ITEMS
     }),
     reminderStartTime: normalizeNumberOrNull(stored.reminderStartTime, base.reminderStartTime),
     reminderInterval: normalizeIntervalMs(stored.reminderInterval, base.reminderInterval),
-    reminderExpectedEndTime: normalizeNumberOrNull(stored.reminderExpectedEndTime, base.reminderExpectedEndTime)
+    reminderExpectedEndTime: normalizeNumberOrNull(stored.reminderExpectedEndTime, base.reminderExpectedEndTime),
+    mindfulnessLastShownAt: normalizeNumberOrNull(stored.mindfulnessLastShownAt, base.mindfulnessLastShownAt)
   };
 
   return enforceStateInvariants({ ...base, ...merged });
@@ -237,6 +242,12 @@ export function computeNextState(currentState, updates) {
   if ('breakReminderEnabled' in updates) {
     sanitized.breakReminderEnabled = normalizeBoolean(updates.breakReminderEnabled, current.breakReminderEnabled);
   }
+  if ('mindfulnessReminderEnabled' in updates) {
+    sanitized.mindfulnessReminderEnabled = normalizeBoolean(
+      updates.mindfulnessReminderEnabled,
+      current.mindfulnessReminderEnabled
+    );
+  }
   if ('distractingSites' in updates) {
     sanitized.distractingSites = normalizeDomainList(updates.distractingSites, current.distractingSites, {
       maxItems: MAX_SITE_LIST_ITEMS
@@ -256,6 +267,10 @@ export function computeNextState(currentState, updates) {
   }
   if ('reminderExpectedEndTime' in updates) {
     sanitized.reminderExpectedEndTime = normalizeNumberOrNull(updates.reminderExpectedEndTime, current.reminderExpectedEndTime);
+  }
+
+  if ('mindfulnessLastShownAt' in updates) {
+    sanitized.mindfulnessLastShownAt = normalizeNumberOrNull(updates.mindfulnessLastShownAt, current.mindfulnessLastShownAt);
   }
 
   return enforceStateInvariants({ ...current, ...sanitized });

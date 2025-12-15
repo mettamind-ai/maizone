@@ -2,6 +2,7 @@
  * MaiZone Browser Extension
  * State Contract: Shared allowlists for state access/mutations across contexts
  * @feature f05 - State Management
+ * @feature f08 - Mindfulness Reminders
  */
 
 import { DEFAULT_STATE } from './state_core.js';
@@ -16,6 +17,7 @@ export const STATE_KEYS = Object.freeze(Object.keys(DEFAULT_STATE));
 export const UI_ALLOWED_UPDATE_KEYS = Object.freeze([
   'blockDistractions',
   'breakReminderEnabled',
+  'mindfulnessReminderEnabled',
   'currentTask',
   'isInFlow',
   'distractingSites',

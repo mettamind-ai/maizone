@@ -31,9 +31,15 @@
     "https://*/*"
   ],
   "commands": {
-    "test-break-reminder": {
+    "test-mindfulness-toast": {
       "suggested_key": {
         "default": "Alt+A"
+      },
+      "description": "Thử mindfulness (toast)"
+    },
+    "test-break-reminder": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
       },
       "description": "Thử nhắc nghỉ ngơi"
     },

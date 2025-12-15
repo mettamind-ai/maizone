@@ -4,6 +4,7 @@
  * @feature f03 - Break Reminder (UI part)
  * @feature f04 - Deep Work Mode (UI part)
  * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @feature f08 - Mindfulness Reminders (UI part)
  */
 
 import { sendMessageSafely } from './messaging.js';
@@ -18,6 +19,7 @@ import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
 // Reference đến các DOM elements chính
 const blockDistractionsToggle = document.getElementById('block-distractions-toggle'); // Toggle chặn trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
+const mindfulnessReminderToggle = document.getElementById('mindfulness-reminder-toggle'); // Toggle nhắc nhở mindfulness
 const settingsButton = document.getElementById('settings-button');                 // Nút mở trang cài đặt
 const statusText = document.getElementById('status-text');                         // Hiển thị trạng thái hiện tại
 const breakReminderCountdown = document.getElementById('break-reminder-countdown'); // Hiển thị thời gian còn lại
@@ -46,6 +48,7 @@ function initializePopup() {
   console.log('🌸 Registering event listeners...');
   blockDistractionsToggle.addEventListener('change', () => handleToggle('blockDistractions'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
+  mindfulnessReminderToggle.addEventListener('change', () => handleToggle('mindfulnessReminderEnabled'));
   settingsButton.addEventListener('click', openSettings);
   
   // Event listener cho task input - Deep Work Flow với phím Enter
@@ -169,6 +172,7 @@ function loadState() {
   const defaults = {
     blockDistractions: true,
     breakReminderEnabled: false,
+    mindfulnessReminderEnabled: false,
     isInFlow: false,
     currentTask: ''
   };
@@ -188,6 +192,7 @@ function updateUI(state) {
   // Update toggles
   blockDistractionsToggle.checked = state.blockDistractions;
   breakReminderToggle.checked = state.breakReminderEnabled;
+  mindfulnessReminderToggle.checked = state.mindfulnessReminderEnabled;
   
   // Update task input
   taskInput.value = state.currentTask || '';
@@ -208,6 +213,10 @@ function handleStateUpdate(updates) {
   
   if ('breakReminderEnabled' in updates) {
     breakReminderToggle.checked = updates.breakReminderEnabled;
+  }
+
+  if ('mindfulnessReminderEnabled' in updates) {
+    mindfulnessReminderToggle.checked = updates.mindfulnessReminderEnabled;
   }
   
   if ('isInFlow' in updates) {
@@ -236,7 +245,8 @@ function handleStateUpdate(updates) {
 function handleToggle(settingKey) {
   const toggleMap = {
     'blockDistractions': blockDistractionsToggle,
-    'breakReminderEnabled': breakReminderToggle
+    'breakReminderEnabled': breakReminderToggle,
+    'mindfulnessReminderEnabled': mindfulnessReminderToggle
   };
   
   const toggle = toggleMap[settingKey];

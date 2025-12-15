@@ -4,6 +4,7 @@
 - **Deep Work 40 phút (f04 + f03)**: nhập 1 task → vào flow → đếm ngược + nhắc nghỉ; badge hiển thị `mm:ss`.
 - **ClipMD (f06)**: **Alt + Q** hoặc **click icon MaiZone** → chọn element trên trang → copy Markdown vào clipboard.
 - **ChatGPT Zen Mode (f07)**: trên `chatgpt.com`, **Alt + Z** ẩn/hiện UI; **Alt + S** dán prompt mẫu để AI trả lời **ngắn gọn, từng bước, và hỏi xác nhận**.
+- **Mindfulness Reminders (f08)**: toast nhắc thở/giãn cơ mỗi 15' (không nhắc khi Deep Work).
 
 
 ## Hướng dẫn cài đặt và giao diện
@@ -49,11 +50,12 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |--------------|--------------------------------------|------------------------------------------------------------|--------------------|--------------|------------|------------------------------------------|
 |<!--r1 c1-->f00|<!--r1 c2-->Text Input Detection     |<!--r1 c3-->Phát hiện và theo dõi người dùng nhập liệu      |<!--r1 c4-->`content.js`   |<!--r1 c5-->`handleFocusIn()`, `handleKeyDown()`  | — |<!--r1 c7-->✅ Done |
 |<!--r2 c1-->f01|<!--r2 c2-->Distraction Blocking     |<!--r2 c3-->Cảnh báo, chặn truy cập trang gây mất tập trung |<!--r2 c4-->`background_distraction.js`, `distraction_matcher.js`, `content.js` |<!--r2 c5-->`getDistractionMatch()`, `isDistractingWebsite()`, `showDistractionWarning()`  | — |<!--r2 c7-->✅ Done |
-|<!--r3 c1-->f03|<!--r3 c2-->Break Reminder           |<!--r3 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r3 c4-->`background_breakReminder.js`, `popup.js`, `clipmd_offscreen.js`, `content.js` |<!--r3 c5-->`sendBreakReminder()`, `startBreakReminder()`, `updateBadgeWithTimerDisplay()` | **Alt + A** |<!--r3 c7-->✅ Done |
+|<!--r3 c1-->f03|<!--r3 c2-->Break Reminder           |<!--r3 c3-->Nhắc nghỉ ngơi vui nhộn mỗi 40"                 |<!--r3 c4-->`background_breakReminder.js`, `popup.js`, `clipmd_offscreen.js`, `content.js` |<!--r3 c5-->`sendBreakReminder()`, `startBreakReminder()`, `updateBadgeWithTimerDisplay()` | **Alt + Shift + A** |<!--r3 c7-->✅ Done |
 |<!--r4 c1-->f04|<!--r4 c2-->Deep Work Mode           |<!--r4 c3-->Tập trung sâu vào một task 40"                  |<!--r4 c4-->`background_breakReminder.js`, `background_distraction.js`, `distraction_matcher.js`, `popup.js`, `clipmd_offscreen.js`, `content.js`  |<!--r4 c5-->`setCurrentTask()`, `resetBreakReminder()` | **Popup ⌨️ Enter**, **Huy hiệu mm:ss** |<!--r4 c7-->✅ Done |
 |<!--r5 c1-->f05|<!--r5 c2-->State Management         |<!--r5 c3-->Đồng bộ hóa trạng thái toàn extension           |<!--r5 c4-->`background_state.js`, `state_core.js`, `state_contract.js`, `state_helpers.js`, `actions.js`, `actions_global.js`, `messaging.js` |<!--r5 c5-->`ensureInitialized()`, `getState()`, `updateState()`, `sanitizeStoredState()` | — |<!--r5 c7-->✅ Done   |
 |<!--r6 c1-->f06|<!--r6 c2-->ClipMD                  |<!--r6 c3-->Copy Markdown bằng cách chọn element trên trang |<!--r6 c4-->`background_clipmd.js`, `clipmd_offscreen.js`, `clipmd_offscreen.html`, `turndown.js`, `content.js`, `popup.js` |<!--r6 c5-->`startClipmdMarkdownPicker()`, `startClipmdPickMode()` | **Alt + Q**, **Click icon Mai** |<!--r6 c7-->🧪 Alpha |
 |<!--r7 c1-->f07|<!--r7 c2-->ChatGPT Zen Hotkeys     |<!--r7 c3-->Ẩn/hiện UI + dán prompt mẫu trên chatgpt.com    |<!--r7 c4-->`content.js`   |<!--r7 c5-->`handleChatgptHotkeys()`, `toggleChatgptZenMode()` | **Alt + Z**, **Alt + S** |<!--r7 c7-->🧪 Alpha |
+|<!--r8 c1-->f08|<!--r8 c2-->Mindfulness Reminders   |<!--r8 c3-->Toast nhắc thở/giãn cơ mỗi 15' (skip khi Deep Work) |<!--r8 c4-->`background_mindfulnessReminder.js`, `content.js`, `popup.js`, `constants.js`, `state_core.js`, `state_contract.js`, `actions.js`, `actions_global.js` |<!--r8 c5-->`initMindfulnessReminder()`, `showMindfulnessToast()` | **Popup toggle**, **Alt + A** |<!--r8 c7-->🧪 Alpha |
 
 **Note**:
 - ở mỗi ô của bảng dùng HTML comment `<!--ri cj-->` để đánh dấu vị trí `hàng i, cột j` của ô bảng, nó invisible khi render và giúp LLM hiểu rõ vị trí bảng tốt hơn (cách làm này giống json format `{"field_name" : field_value }` ~= `|<!--ri cj-->cell_value|`).
@@ -73,7 +75,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 - [x] `f01` Mai không khuyến khích người dùng vào các trang webs dễ gây sao nhãng như youtube, ca nhạc, news
 
 - [x] `f03` Sau 40 phút Mai sẽ nhắc nhở người dùng nghỉ ngơi, thư giãn, tập thể dục tạm rời xa máy tính một chút. Hãy tạo những lời nhắc vui nhộn, nhẹ nhàng, dí dỏm, khiến user bật cười. Trong popup có dòng chữ `Nhắc nhở nghỉ ngơi (40:00)` nếu được bật thì phần đồng hồ đếm ngược `(40:00)` sẽ phản ánh số thời gian còn lại cho tới thời gian nghỉ tiếp theo (ví dụ `31:33` ... và cho tới `00:00` thì báo nghỉ và reset về `40:00`)
-  - [x] `f03a` **Alt + A** để test / kích hoạt nhắc nghỉ ngay
+  - [x] `f03a` **Alt + Shift + A** để test / kích hoạt nhắc nghỉ ngay
 
 - [x] `f04` flow-sâu-n-lâu, time-blocking, 1 goal.
   - [x] `f04a` Trong 1 block chỉ làm 1 việc (1 mục đích rõ ràng) => Trong popup, Mai có 1 ô để user nhập vào task định làm trong 40-min block tiếp theo sau khi nhập xong thì đồng hồ đếm ngược được reset về 40:00
@@ -83,8 +85,6 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 
 - [x] `f05` Quản lý và đồng bộ state/ Xây dựng layer quản lý state thống nhất cho tất cả các tính năng, tránh rải rác state ở nhiều nơi. Sử dụng thư viện như Zustand hoặc lightweight state management tự xây dựng để quản lý toàn bộ trạng thái tập trung (ví dụ: deep work mode, tasks, timer state).
 
-**🌸🌸 PENDING 🌸🌸**
-
-- [ ] `f??` Mindfulness Reminders - mỗi 15 phút hiển thị:
-  - [ ] Những câu quote ngắn gọn gợi lên sự vui vẻ và tâm từ
-  - [ ] hoặc Nhắc nhở tập thể dục và giãn cơ định kỳ
+- [x] `f08` Mindfulness Reminders - mỗi 15 phút hiển thị toast (skip khi Deep Work):
+  - [x] Những câu quote ngắn gọn gợi lên sự vui vẻ và tâm từ
+  - [x] Nhắc nhở tập thể dục và giãn cơ định kỳ

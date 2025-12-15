@@ -14,6 +14,7 @@ const SERVICE_WORKER_MODULES = [
   'background_breakReminder.js',
   'background_clipmd.js',
   'background_distraction.js',
+  'background_mindfulnessReminder.js',
   'background_state.js',
   'constants.js',
   'distraction_matcher.js',
@@ -44,4 +45,3 @@ test('MV3 service worker modules must not use dynamic import()', () => {
     assert.ok(!/\bimport\s*\(/.test(stripped), `${filename} must not contain dynamic import()`);
   }
 });
-

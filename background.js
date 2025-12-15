@@ -6,11 +6,13 @@
  * @feature f04 - Deep Work Mode
  * @feature f05 - State Management
  * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @feature f08 - Mindfulness Reminders
  */
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
 import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
+import { initMindfulnessReminder, sendMindfulnessToast } from './background_mindfulnessReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
@@ -24,7 +26,8 @@ function summarizeStateForLog(state) {
   return {
     blockDistractions: !!s.blockDistractions,
     isInFlow: !!s.isInFlow,
-    breakReminderEnabled: !!s.breakReminderEnabled
+    breakReminderEnabled: !!s.breakReminderEnabled,
+    mindfulnessReminderEnabled: !!s.mindfulnessReminderEnabled
   };
 }
 
@@ -41,6 +44,7 @@ function initBackgroundScript() {
     // Initialize feature modules
     initDistraction();
     initBreakReminder();
+    initMindfulnessReminder();
     initClipmd();
     
     // Set up event listeners
@@ -96,6 +100,20 @@ async function handleCommand(command) {
     await ensureInitialized();
   } catch (error) {
     // ignore (ClipMD/Break reminder can still run without state)
+  }
+
+  if (command === 'test-mindfulness-toast') {
+    try {
+      const result = await sendMindfulnessToast({ allowDuringDeepWork: true });
+      if (result?.ok) {
+        console.log('🌸 Mindfulness toast triggered');
+        return;
+      }
+      console.warn('🌸🌸🌸 Mindfulness toast not delivered:', result?.skipped || 'unknown');
+    } catch (error) {
+      console.error('🌸🌸🌸 Error sending mindfulness toast:', error);
+    }
+    return;
   }
 
   if (command === 'test-break-reminder') {

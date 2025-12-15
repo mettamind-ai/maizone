@@ -5,6 +5,7 @@
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  * @feature f06 - ClipMD (Clipboard to Markdown)
+ * @feature f08 - Mindfulness Reminders
  */
 
 /******************************************************************************
@@ -36,6 +37,43 @@ export const BREAK_REMINDER_MESSAGES = [
   "🌸 Sheesh! 40 phút code liên tục? Ok, I see you! Nhưng Mai thấy mắt cậu đỏ như ma cà rồng! 👹👀",
   "🌸 Cậu có biết là đang làm mông teo đi không? Stand up for your rights... và cho mông! ✊🍑",
   "🌸 Còn chờ gì nữa? Inbox người yêu 1 tin nhắn ngọt ngào rồi hẵng quay lại làm việc! 💌💕"
+];
+
+/******************************************************************************
+ * MINDFULNESS REMINDERS [f08]
+ ******************************************************************************/
+
+// Mindfulness reminder interval (15 minutes)
+export const MINDFULNESS_REMINDER_INTERVAL_MINUTES = 15;
+
+// Short, kind reminders (quotes) to bring attention back gently.
+export const MINDFULNESS_QUOTES = [
+  '🌸 Hít vào sâu. Thở ra chậm. Mỉm cười nhẹ.',
+  '🌸 Chỉ cần một nhịp thở, mình quay về hiện tại.',
+  '🌸 Nhẹ nhàng với chính mình.',
+  '🌸 Bạn đang làm tốt rồi.',
+  '🌸 Một bước nhỏ cũng là tiến lên.',
+  '🌸 Chậm lại một chút, rồi tiếp tục.',
+  '🌸 Mình chọn bình an, ngay lúc này.',
+  '🌸 Tâm từ với mình, rồi lan ra người khác.',
+  '🌸 Thả lỏng vai… và thở.',
+  '🌸 Cảm ơn cơ thể đã nâng đỡ mình.',
+  '🌸 Đủ rồi. Tốt rồi. Tiếp thôi.',
+  '🌸 Uống một ngụm nước, rồi quay lại nhé.'
+];
+
+// Gentle movement reminders (no pressure).
+export const MINDFULNESS_STRETCH_REMINDERS = [
+  '🌸 Đứng dậy 30 giây, thả lỏng vai và cổ nhé.',
+  '🌸 Duỗi lưng: vươn tay lên cao 10 giây.',
+  '🌸 Lăn vai 5 vòng chậm, hít thở sâu.',
+  '🌸 Nhìn xa 20 giây để mắt được nghỉ.',
+  '🌸 Chớp mắt chậm 10 lần, thư giãn một chút.',
+  '🌸 Xoay cổ tay, duỗi các ngón tay 10 giây.',
+  '🌸 Đổi tư thế ngồi, chỉnh lưng thẳng nhẹ nhàng.',
+  '🌸 Đi lấy nước một chút nhé.',
+  '🌸 Thả lỏng hàm, buông vai.',
+  '🌸 Nếu thấy mỏi, dừng lại và hít thở 3 nhịp.'
 ];
 
 /******************************************************************************
