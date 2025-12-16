@@ -10,7 +10,7 @@
 ## Hướng dẫn cài đặt và giao diện
 |||
 |-|-|
-|<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />|<img width="2171" height="1437" alt="image" src="https://github.com/user-attachments/assets/31a828ca-642f-4f8d-9bf3-88f491405df4" />|
+|<img width="2376" height="1620" alt="image" src="https://github.com/user-attachments/assets/c89741d1-215d-417a-a023-edf3146d7ad8" />|<img width="2261" height="1653" alt="image" src="https://github.com/user-attachments/assets/469f4f7b-e7c7-413b-9438-01ef11fd8930" />|
 
 ---
 
