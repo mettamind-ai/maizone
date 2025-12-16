@@ -47,6 +47,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
 |<!--r7 c1-->f07|<!--r7 c2-->ChatGPT Zen Hotkeys     |<!--r7 c3-->Ẩn/hiện UI + dán prompt mẫu trên chatgpt.com    |<!--r7 c4-->`content.js`   |<!--r7 c5-->`handleChatgptHotkeys()`, `toggleChatgptZenMode()` | **Alt + Z**, **Alt + S** |<!--r7 c7-->🧪 Alpha |
 |<!--r8 c1-->f08|<!--r8 c2-->Mindfulness Reminders   |<!--r8 c3-->Toast nhắc thở/giãn cơ mỗi 15 phút (không nhắc khi Deep Work) |<!--r8 c4-->`background_mindfulnessReminder.js`, `content.js`, `popup.js`, `constants.js`, `state_core.js`, `state_contract.js`, `actions.js`, `actions_global.js` |<!--r8 c5-->`initMindfulnessReminder()`, `showMindfulnessToast()` | **Popup toggle**, **Alt + A** |<!--r8 c7-->🧪 Alpha |
 |<!--r9 c1-->f09|<!--r9 c2-->Onboarding             |<!--r9 c3-->Hướng dẫn nhanh 3 cards (install) để user không bị choáng |<!--r9 c4-->`onboarding.html`, `onboarding.js`, `background.js`, `popup.js`, `state_core.js`, `state_contract.js` |<!--r9 c5-->`openOnboardingIfNeeded()`, `initOnboarding()` | **Install auto-open**, **Popup ❔** |<!--r9 c7-->🧪 Alpha |
+|<!--r10 c1-->f10|<!--r10 c2-->Context Menu         |<!--r10 c3-->Chuột phải → chặn/bỏ chặn trang + copy Markdown nhanh |<!--r10 c4-->`background_contextMenus.js`, `background_state.js`, `content.js`, `actions.js`, `actions_global.js`, `manifest.json` |<!--r10 c5-->`initContextMenus()`, `showMaiToast()` | **Right click → MaiZone** |<!--r10 c7-->🧪 Alpha |
 
 **Note**:
 - ở mỗi ô của bảng dùng HTML comment `<!--ri cj-->` để đánh dấu vị trí `hàng i, cột j` của ô bảng, nó invisible khi render và giúp LLM hiểu rõ vị trí bảng tốt hơn (cách làm này giống json format `{"field_name" : field_value }` ~= `|<!--ri cj-->cell_value|`).
@@ -81,3 +82,7 @@ Việc tổ chức tài liệu và source code theo cách đánh tag và liên k
   - [x] Nhắc nhở tập thể dục và giãn cơ định kỳ
 
 - [x] `f09` Onboarding - 3 cards hướng dẫn nhẹ nhàng cho user mới (auto-open khi cài, có nút ❔ để mở lại)
+
+- [x] `f10` Context Menu - chuột phải để thao tác nhanh:
+  - [x] Chặn / bỏ chặn trang hiện tại
+  - [x] Copy đoạn bôi đen / link / ảnh → Markdown

@@ -13,6 +13,7 @@ const SERVICE_WORKER_MODULES = [
   'background.js',
   'background_breakReminder.js',
   'background_clipmd.js',
+  'background_contextMenus.js',
   'background_distraction.js',
   'background_mindfulnessReminder.js',
   'background_state.js',
