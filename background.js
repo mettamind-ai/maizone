@@ -9,6 +9,7 @@
  * @feature f08 - Mindfulness Reminders
  * @feature f09 - Onboarding
  * @feature f10 - Context Menu Quick Actions
+ * @feature f11 - Omnibox Commands
  */
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
@@ -17,6 +18,7 @@ import { initBreakReminder, sendBreakReminder } from './background_breakReminder
 import { initMindfulnessReminder, sendMindfulnessToast } from './background_mindfulnessReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
 import { initContextMenus } from './background_contextMenus.js';
+import { initOmnibox } from './background_omnibox.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -50,6 +52,7 @@ function initBackgroundScript() {
     initMindfulnessReminder();
     initClipmd();
     initContextMenus();
+    initOmnibox();
     
     // Set up event listeners
     setupEventListeners();

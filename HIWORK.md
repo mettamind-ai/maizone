@@ -76,6 +76,20 @@ sendMessageToTabSafely(tabId, {
 - **Nhiệm vụ**: Quản lý tất cả cài đặt, cấu hình chi tiết các tính năng
 - **Lưu trữ**: Lưu cài đặt vào chrome.storage.sync hoặc chrome.storage.local
 
+## Omnibox Commands (f11) — Gõ `mai␠` trên address bar
+
+- **Bật**: khai báo trong `manifest.json`:
+  - `"omnibox": { "keyword": "mai" }`
+- **Cách dùng**: gõ `mai` + Space/Tab → nhập lệnh → Enter.
+- **Lệnh hỗ trợ**:
+  - `on` / `off`: bật/tắt `blockDistractions`
+  - `deepwork 40 [task]`: bắt đầu Deep Work với số phút tuỳ chọn (1–1440); `[task]` có thể bỏ trống
+  - `stop`: dừng Deep Work (reset task + timer)
+  - `mind on` / `mind off`: bật/tắt nhắc mindfulness
+  - `clip`: bật ClipMD (chọn element → copy Markdown)
+- **UX feedback**: ưu tiên toast in-page (`maiToast`) trên tab http/https đang active; nếu không gửi được thì fallback sang notification hệ thống.
+- **MV3 reliability**: omnibox event có thể wake service worker, nên handler gọi `ensureInitialized()` trước khi đọc state.
+
 ## ClipMD (f06) — Copy Markdown bằng chọn vùng
 
 - **Mục tiêu**: Bấm shortcut → chọn (pick) 1 element trên trang → chuyển HTML → Markdown → copy vào clipboard.

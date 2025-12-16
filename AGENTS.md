@@ -16,6 +16,7 @@
   - `actions.js`: `messageActions` constants (không hardcode string rải rác)
   - `actions_global.js`: `MAIZONE_ACTIONS` (classic) cho `content.js` để tránh drift string actions
   - `messaging.js`: `sendMessageSafely()`/`sendMessageToTabSafely()` có timeout + handle invalidation
+  - `background_omnibox.js`: omnibox keyword `mai` → lệnh nhanh (on/off, deepwork, mind, clip)
   - `background_clipmd.js` + `clipmd_offscreen.*`: tiện ích **ClipMD** (chọn element -> HTML -> Markdown)
   - `content.js`: **classic script** (không dùng `import`), tối giản footprint + privacy-first
 - **File Organization**

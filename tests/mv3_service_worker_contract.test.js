@@ -16,6 +16,7 @@ const SERVICE_WORKER_MODULES = [
   'background_contextMenus.js',
   'background_distraction.js',
   'background_mindfulnessReminder.js',
+  'background_omnibox.js',
   'background_state.js',
   'constants.js',
   'distraction_matcher.js',

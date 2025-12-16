@@ -51,6 +51,9 @@
       "description": "Copy Markdown (chọn element)"
     }
   },
+  "omnibox": {
+    "keyword": "mai"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

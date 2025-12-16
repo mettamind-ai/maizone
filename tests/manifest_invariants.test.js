@@ -10,6 +10,7 @@ test('manifest invariants (MV3 + content script order)', () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.background?.service_worker, 'background.js');
   assert.equal(manifest.background?.type, 'module');
+  assert.equal(manifest.omnibox?.keyword, 'mai', 'omnibox keyword must be "mai"');
 
   const contentScripts = manifest.content_scripts;
   assert.ok(Array.isArray(contentScripts) && contentScripts.length >= 1, 'content_scripts must exist');
@@ -29,4 +30,3 @@ test('manifest invariants (MV3 + content script order)', () => {
     'content matches must be http/https only'
   );
 });
-
