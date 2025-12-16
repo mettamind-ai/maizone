@@ -24,9 +24,23 @@ async function initOptions() {
 
   const addSiteBtn = document.getElementById('add-site-btn');
   const addDeepWorkSiteBtn = document.getElementById('add-deepwork-site-btn');
+  const newSiteInput = document.getElementById('new-site-input');
+  const newDeepWorkSiteInput = document.getElementById('new-deepwork-site-input');
 
   addSiteBtn?.addEventListener('click', () => handleAddSite('distractingSites'));
   addDeepWorkSiteBtn?.addEventListener('click', () => handleAddSite('deepWorkBlockedSites'));
+
+  // UX: allow Enter to add quickly
+  newSiteInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleAddSite('distractingSites');
+  });
+  newDeepWorkSiteInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleAddSite('deepWorkBlockedSites');
+  });
 
   // Listen for state updates
   chrome.runtime.onMessage.addListener((message) => {
@@ -93,6 +107,36 @@ function renderSiteList(listType, sites) {
   });
 }
 
+/***** UI HELPERS *****/
+
+/**
+ * Highlight an existing site entry briefly (helps users see duplicates).
+ * @param {'distractingSites'|'deepWorkBlockedSites'} listType - Which list
+ * @param {string} site - Normalized hostname
+ * @returns {void}
+ */
+function flashExistingSite(listType, site) {
+  const listContainerId = listType === 'distractingSites' ? 'site-list' : 'deepwork-site-list';
+  const listContainer = document.getElementById(listContainerId);
+  if (!listContainer) return;
+
+  const items = Array.from(listContainer.querySelectorAll('li'));
+  const target = items.find((li) => (li?.textContent || '').trim() === site);
+  if (!target) return;
+
+  const previousBg = target.style.backgroundColor;
+  const previousOutline = target.style.outline;
+
+  target.style.backgroundColor = '#fff3cd';
+  target.style.outline = '1px solid #ffe69c';
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+  setTimeout(() => {
+    target.style.backgroundColor = previousBg;
+    target.style.outline = previousOutline;
+  }, 900);
+}
+
 /***** LIST MUTATIONS *****/
 
 /**
@@ -103,17 +147,22 @@ function renderSiteList(listType, sites) {
  */
 function removeSite(listType, site) {
   getStateSafely(listType)
-    .then((response) => {
-      const sites = response[listType] || [];
+    .then(async (response) => {
+      const sites = Array.isArray(response?.[listType]) ? response[listType] : [];
       const updated = sites.filter((s) => s !== site);
 
-      return updateStateSafely({ [listType]: updated }).then(() => {
-        renderSiteList(listType, updated);
-      });
+      const ok = await updateStateSafely({ [listType]: updated });
+      if (!ok) {
+        alert('Không thể lưu thay đổi. Thử reload extension và thử lại nhé.');
+        const fresh = await getStateSafely(listType);
+        renderSiteList(listType, fresh?.[listType] || sites);
+        return;
+      }
+
+      const fresh = await getStateSafely(listType);
+      renderSiteList(listType, fresh?.[listType] || updated);
     })
-    .catch((error) => {
-      console.error('🌸🌸🌸 Error removing site:', error);
-    });
+    .catch((error) => console.error('🌸🌸🌸 Error removing site:', error));
 }
 
 /**
@@ -133,20 +182,28 @@ function handleAddSite(listType) {
   }
 
   getStateSafely(listType)
-    .then((response) => {
-      const sites = response[listType] || [];
+    .then(async (response) => {
+      const sites = Array.isArray(response?.[listType]) ? response[listType] : [];
 
-      if (!sites.includes(newSite)) {
-        const updated = [...sites, newSite];
-        return updateStateSafely({ [listType]: updated }).then(() => {
-          input.value = '';
-          renderSiteList(listType, updated);
-        });
+      if (sites.includes(newSite)) {
+        alert('Trang này đã có trong danh sách rồi.');
+        flashExistingSite(listType, newSite);
+        return;
       }
+
+      const updated = [...sites, newSite];
+      const ok = await updateStateSafely({ [listType]: updated });
+      if (!ok) {
+        alert('Không thể lưu thay đổi. Thử reload extension và thử lại nhé.');
+        return;
+      }
+
+      input.value = '';
+      const fresh = await getStateSafely(listType);
+      renderSiteList(listType, fresh?.[listType] || updated);
+      flashExistingSite(listType, newSite);
     })
-    .catch((error) => {
-      console.error('🌸🌸🌸 Error adding site:', error);
-    });
+    .catch((error) => console.error('🌸🌸🌸 Error adding site:', error));
 }
 
 /***** INPUT SANITIZATION *****/

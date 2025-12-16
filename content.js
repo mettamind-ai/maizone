@@ -134,6 +134,10 @@ let lastYoutubeUrl = '';
 let maiToastTimeoutId = null;
 let maiToastFadeTimeoutId = null;
 
+// [f01] When lists/flow change while tab is hidden, defer re-check until visible to avoid
+// showing an auto-close warning in background tabs.
+let pendingDistractionRecheckWhenVisible = false;
+
 /******************************************************************************
  * INITIALIZATION
  ******************************************************************************/
@@ -189,11 +193,15 @@ function initialize() {
     if (changes.isInFlow) {
       console.log('🌸 Deep Work status changed:', changes.isInFlow.newValue);
       // Khi trạng thái flow thay đổi, kiểm tra lại URL hiện tại để áp dụng chặn trang nhắn tin (f04c)
-      checkIfDistractingSite();
+      scheduleDistractionRecheck();
     }
 
     if (changes.distractingSites) {
-      refreshDistractionWarningAfterListChange().catch(() => {});
+      scheduleDistractionRecheck();
+    }
+
+    if (changes.deepWorkBlockedSites) {
+      scheduleDistractionRecheck();
     }
 
     // [f03] Opera badge tick fallback: sync on any timer-related change.
@@ -221,7 +229,10 @@ function attachDomListeners() {
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
   document.addEventListener('click', handleClick);
-  document.addEventListener('visibilitychange', () => syncOperaBadgeTickFallback());
+  document.addEventListener('visibilitychange', () => {
+    syncOperaBadgeTickFallback();
+    if (document.visibilityState === 'visible') runPendingDistractionRecheck();
+  });
   setupMindfulnessAudioUnlockListeners();
 
   domListenersAttached = true;
@@ -1694,6 +1705,32 @@ function checkIfDistractingSite() {
   } catch (error) {
     console.error('🌸🌸🌸 Error in checkIfDistractingSite:', error);
   }
+}
+
+/**
+ * Schedule a distraction re-check safely (only run when tab is visible).
+ * @returns {void}
+ */
+function scheduleDistractionRecheck() {
+  if (!isDistractionBlockingEnabled) return;
+
+  if (document.visibilityState === 'visible') {
+    pendingDistractionRecheckWhenVisible = false;
+    refreshDistractionWarningAfterListChange().catch(() => {});
+    return;
+  }
+
+  pendingDistractionRecheckWhenVisible = true;
+}
+
+/**
+ * Run a pending distraction re-check when the tab becomes visible.
+ * @returns {void}
+ */
+function runPendingDistractionRecheck() {
+  if (!pendingDistractionRecheckWhenVisible) return;
+  pendingDistractionRecheckWhenVisible = false;
+  refreshDistractionWarningAfterListChange().catch(() => {});
 }
 
 /**

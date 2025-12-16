@@ -231,6 +231,51 @@ function handleStateUpdated(updates) {
   if ('blockDistractions' in updates) {
     syncDistractionBlocking();
   }
+
+  // If lists or Deep Work mode change, re-check the active tab so the effect is immediate
+  // (otherwise users may think “Thêm” không hoạt động until they reload/navigate).
+  const shouldRecheckActiveTab =
+    'distractingSites' in updates || 'deepWorkBlockedSites' in updates || 'isInFlow' in updates;
+  if (shouldRecheckActiveTab) {
+    checkActiveTabForDistraction().catch(() => {});
+  }
+}
+
+/**
+ * Re-check active tab against the latest state and warn if needed.
+ * @returns {Promise<void>}
+ */
+async function checkActiveTabForDistraction() {
+  try {
+    if (!chrome?.tabs?.query) return;
+
+    await ensureInitialized();
+    const { blockDistractions } = getState();
+    if (!blockDistractions) return;
+
+    const activeTab = await new Promise((resolve) => {
+      try {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          resolve(Array.isArray(tabs) && tabs.length ? tabs[0] : null);
+        });
+      } catch {
+        resolve(null);
+      }
+    });
+
+    const tabId = activeTab?.id;
+    const url = typeof activeTab?.url === 'string' ? activeTab.url : '';
+    if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return;
+
+    const state = getState();
+    const match = getDistractionMatch(url, state);
+    if (!match.isDistracting) return;
+
+    sendWarningToTab(tabId, url);
+  } catch (error) {
+    console.error('🌸🌸🌸 Error checking active tab after state change:', error);
+  }
 }
 
 /**
