@@ -98,6 +98,15 @@ sendMessageToTabSafely(tabId, {
 - **Triển khai**: `background_breakReminder.js` đảm bảo offscreen doc tồn tại; `clipmd_offscreen.js` đọc state từ `chrome.storage.local` và cập nhật badge (không log nội dung task).
 - **Vì sao có thể tốn pin/không mượt?** Không có `offscreen` thì muốn badge nhảy từng giây phải wake MV3 service worker theo `chrome.alarms`, nên có thể bị throttle/clamp tuỳ trình duyệt.
 
+## Mindfulness Reminders (f08) — Toast + chuông nhẹ
+
+- **Timer MV3**: `background_mindfulnessReminder.js` dùng `chrome.alarms` mỗi 15 phút, skip khi đang Deep Work (`isInFlow=true`), và gửi message sang tab active để hiển thị toast.
+- **Toast hiển thị**: `content.js` nhận action `mindfulnessToast` và render toast (in-page), không dùng notification hệ thống để tránh làm user giật mình quá mức.
+- **Chuông (Web Audio) và giới hạn autoplay**:
+  - Chrome **không cho** `AudioContext` start/resume nếu **không có user gesture** (click/keydown) trên trang.
+  - Vì vậy Mai chỉ “unlock” audio sau **lần click/keydown đầu tiên** trên mỗi trang; trước đó toast sẽ **im lặng** (để tránh spam lỗi console kiểu “AudioContext was not allowed to start...”).
+  - Nếu muốn đảm bảo luôn có âm báo dù user chưa tương tác trang, cần chuyển sang notification hệ thống (âm do OS/browser quyết định) thay vì Web Audio.
+
 ## Tổng Quan Kiến Trúc
 
 ```

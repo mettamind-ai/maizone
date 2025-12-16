@@ -10,6 +10,10 @@
  * @feature f08 - Mindfulness Reminders (toast)
  */
 
+// Content scripts can be programmatically injected multiple times (install/update, retries).
+// Wrap in an IIFE so repeated injections don't crash on top-level re-declarations.
+(() => {
+
 /******************************************************************************
  * MESSAGING (COMPAT LAYER)
  ******************************************************************************/
@@ -116,6 +120,8 @@ let chatgptToastTimeoutId = null;
 let mindfulnessToastTimeoutId = null;
 let mindfulnessToastFadeTimeoutId = null;
 let mindfulnessAudioContext = null;
+let mindfulnessAudioUnlocked = false;
+let hasRegisteredMindfulnessAudioUnlock = false;
 
 // YouTube SPA monitoring
 let youtubeObserver = null;
@@ -206,6 +212,7 @@ function attachDomListeners() {
   document.addEventListener('keyup', handleKeyUp);
   document.addEventListener('click', handleClick);
   document.addEventListener('visibilitychange', () => syncOperaBadgeTickFallback());
+  setupMindfulnessAudioUnlockListeners();
 
   domListenersAttached = true;
 }
@@ -1012,6 +1019,41 @@ function ensureMindfulnessToastStyles() {
 }
 
 /**
+ * Unlock mindfulness audio after a user gesture (required by autoplay policies).
+ * @feature f08 - Mindfulness Reminders
+ * @returns {void}
+ */
+function setupMindfulnessAudioUnlockListeners() {
+  if (hasRegisteredMindfulnessAudioUnlock) return;
+  hasRegisteredMindfulnessAudioUnlock = true;
+
+  const unlock = () => {
+    mindfulnessAudioUnlocked = true;
+    primeMindfulnessAudioContext();
+  };
+
+  // Capture + once: minimal overhead and counts as a user gesture on the page.
+  document.addEventListener('pointerdown', unlock, { capture: true, passive: true, once: true });
+  document.addEventListener('keydown', unlock, { capture: true, passive: true, once: true });
+}
+
+/**
+ * Create/resume AudioContext (must be called from a user gesture).
+ * @feature f08 - Mindfulness Reminders
+ * @returns {void}
+ */
+function primeMindfulnessAudioContext() {
+  try {
+    const AudioCtx = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!mindfulnessAudioContext) mindfulnessAudioContext = new AudioCtx();
+    mindfulnessAudioContext.resume?.().catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Play a short, gentle chime (best-effort).
  * NOTE: Some sites may block playback due to autoplay policies; we ignore failures.
  * @feature f08 - Mindfulness Reminders
@@ -1019,16 +1061,10 @@ function ensureMindfulnessToastStyles() {
  */
 async function playMindfulnessChime() {
   try {
-    const AudioCtx = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!AudioCtx) return false;
-
-    if (!mindfulnessAudioContext) mindfulnessAudioContext = new AudioCtx();
-
-    if (mindfulnessAudioContext.state === 'suspended') {
-      await mindfulnessAudioContext.resume();
-    }
+    if (!mindfulnessAudioUnlocked) return false;
 
     const ctx = mindfulnessAudioContext;
+    if (!ctx || ctx.state !== 'running') return false;
     const now = ctx.currentTime;
 
     const gain = ctx.createGain();
@@ -1623,3 +1659,5 @@ function stopYouTubeNavigationObserver() {
  ******************************************************************************/
 
 initialize();
+
+})();
