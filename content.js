@@ -115,7 +115,7 @@ let operaBadgePort = null;
 let operaBadgePortKeepaliveIntervalId = null;
 
 // [f07] ChatGPT helpers state
-let isChatgptZenModeEnabled = true;
+let isChatgptZenModeEnabled = false;
 let chatgptZenObserver = null;
 let chatgptZenApplyTimeoutId = null;
 let chatgptToastTimeoutId = null;
@@ -160,7 +160,7 @@ function initialize() {
       isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
 
       const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
-      isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : true;
+      isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : false;
 
       syncContentScriptActiveState();
       syncOperaBadgeTickFallback(result || {});
@@ -186,7 +186,7 @@ function initialize() {
 
     if (changes[CHATGPT_ZEN_STORAGE_KEY]) {
       const nextValue = changes[CHATGPT_ZEN_STORAGE_KEY]?.newValue;
-      isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : true;
+      isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : false;
       syncChatgptHelperActiveState();
     }
 
