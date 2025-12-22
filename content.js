@@ -81,6 +81,17 @@ const CHATGPT_ZEN_STORAGE_KEY = 'chatgptZenMode';
 const CHATGPT_ZEN_SELECTORS = Object.freeze(['.cursor-pointer', '#page-header', '#thread-bottom', '#full_editor']);
 const CHATGPT_TEMPLATE = "You are very smart, intellectually curious, empathetic, patient, nurturing, and engaging. You proceed in small steps, asking if the user understands and has completed a step, and waiting for their answer before continuing. You should be concise, direct, and without unnecessary explanations or summaries. Avoid giving unnecessary details or deviating from the user's request, focusing solely on the specific question at hand. Trình bày output text dưới dạng văn xuôi, dễ hiểu, ít gạch đầu dòng. Các lệnh tắt cần ghi nhớ: `vx`: là lệnh cho bạn viết lại phản hồi gần nhất dưới dạng văn xuôi. `vd`: là lệnh cho bạn cho thêm ví dụ minh hoạ cho phản hồi gần nhất.";
 
+// [f12] arXiv Zen (default ON): hide clutter on arxiv.org/html/*
+const ARXIV_HOST = 'arxiv.org';
+const ARXIV_ZEN_STORAGE_KEY = 'arxivZenMode';
+const ARXIV_ZEN_HIDE_SELECTORS = Object.freeze([
+  'header.mob_header',
+  'header.desktop_header',
+  'button#openForm',
+  'footer#footer',
+  'nav.ltx_TOC'
+]);
+
 // [f03] Opera badge tick fallback: keep badge updated per-second by keeping the SW active via a Port.
 const OPERA_BADGE_PORT_NAME = 'maizoneBreakReminderBadgeTicker';
 const OPERA_BADGE_PORT_KEEPALIVE_MS = 25_000;
@@ -119,6 +130,12 @@ let isChatgptZenModeEnabled = false;
 let chatgptZenObserver = null;
 let chatgptZenApplyTimeoutId = null;
 let chatgptToastTimeoutId = null;
+
+// [f12] arXiv Zen state
+let isArxivZenModeEnabled = true; // default ON
+let arxivZenObserver = null;
+let arxivZenApplyTimeoutId = null;
+
 let mindfulnessToastTimeoutId = null;
 let mindfulnessToastFadeTimeoutId = null;
 let mindfulnessAudioContext = null;
@@ -154,13 +171,17 @@ function initialize() {
 
   // Load settings early so we can avoid unnecessary work for disabled features
   chrome.storage.local.get(
-    ['blockDistractions', CHATGPT_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
+    ['blockDistractions', CHATGPT_ZEN_STORAGE_KEY, ARXIV_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
     (result) => {
       const { blockDistractions } = result || {};
       isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
 
       const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
       isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : false;
+
+      // arXiv Zen defaults to true
+      const rawArxivZenMode = result?.[ARXIV_ZEN_STORAGE_KEY];
+      isArxivZenModeEnabled = typeof rawArxivZenMode === 'boolean' ? rawArxivZenMode : true;
 
       syncContentScriptActiveState();
       syncOperaBadgeTickFallback(result || {});
@@ -188,6 +209,12 @@ function initialize() {
       const nextValue = changes[CHATGPT_ZEN_STORAGE_KEY]?.newValue;
       isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : false;
       syncChatgptHelperActiveState();
+    }
+
+    if (changes[ARXIV_ZEN_STORAGE_KEY]) {
+      const nextValue = changes[ARXIV_ZEN_STORAGE_KEY]?.newValue;
+      isArxivZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : true;
+      syncArxivZenActiveState();
     }
 
     if (changes.isInFlow) {
@@ -252,6 +279,7 @@ function syncContentScriptActiveState() {
   }
 
   syncChatgptHelperActiveState();
+  syncArxivZenActiveState();
   checkIfDistractingSite();
 }
 
@@ -861,6 +889,202 @@ function removeChatgptToast() {
   clearTimeout(chatgptToastTimeoutId);
   chatgptToastTimeoutId = null;
   document.getElementById('mai-chatgpt-toast')?.remove?.();
+}
+
+/******************************************************************************
+ * ARXIV ZEN MODE [f12]
+ ******************************************************************************/
+
+/**
+ * Check if current page is arxiv.org/html/*
+ * @returns {boolean}
+ */
+function isArxivHtmlPage() {
+  const host = window.location?.hostname || '';
+  const path = window.location?.pathname || '';
+  return host === ARXIV_HOST && path.startsWith('/html/');
+}
+
+/**
+ * Sync arXiv Zen state.
+ * @returns {void}
+ */
+function syncArxivZenActiveState() {
+  if (!isArxivHtmlPage()) return;
+
+  if (isArxivZenModeEnabled) {
+    applyArxivZenMode(true);
+    startArxivZenObserver();
+  } else {
+    stopArxivZenObserver();
+    applyArxivZenMode(false);
+  }
+}
+
+/**
+ * Apply or restore arXiv Zen mode.
+ * @param {boolean} enable
+ * @returns {void}
+ */
+function applyArxivZenMode(enable) {
+  ARXIV_ZEN_HIDE_SELECTORS.forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    if (enable) {
+      hideElementForZen(el);
+    } else {
+      restoreElementFromZen(el);
+    }
+  });
+}
+
+/**
+ * Start observer to re-apply Zen on DOM changes.
+ * @returns {void}
+ */
+function startArxivZenObserver() {
+  if (!isArxivHtmlPage() || !isArxivZenModeEnabled || arxivZenObserver) return;
+
+  arxivZenObserver = new MutationObserver(() => {
+    if (arxivZenApplyTimeoutId) return;
+    arxivZenApplyTimeoutId = setTimeout(() => {
+      arxivZenApplyTimeoutId = null;
+      applyArxivZenMode(true);
+    }, 150);
+  });
+  arxivZenObserver.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+/**
+ * Stop arXiv Zen observer.
+ * @returns {void}
+ */
+function stopArxivZenObserver() {
+  arxivZenObserver?.disconnect?.();
+  arxivZenObserver = null;
+  clearTimeout(arxivZenApplyTimeoutId);
+  arxivZenApplyTimeoutId = null;
+}
+
+/******************************************************************************
+ * ARXIV ZEN MODE [f12]
+ ******************************************************************************/
+
+/**
+ * Check if current page is arxiv.org/html/*
+ * @returns {boolean}
+ */
+function isArxivHtmlPage() {
+  const host = (window.location?.hostname || '').toLowerCase();
+  const path = window.location?.pathname || '';
+  return host === ARXIV_HOST && path.startsWith('/html/');
+}
+
+/**
+ * Sync arXiv Zen effects with current enabled state.
+ * @returns {void}
+ */
+function syncArxivZenActiveState() {
+  if (!isArxivHtmlPage()) return;
+
+  if (isArxivZenModeEnabled) {
+    applyArxivZenMode(true);
+    startArxivZenObserver();
+    return;
+  }
+
+  stopArxivZenObserver();
+  restoreArxivZenElements();
+}
+
+/**
+ * Apply or restore arXiv Zen mode.
+ * @param {boolean} enable - True to apply, false to restore
+ * @returns {void}
+ */
+function applyArxivZenMode(enable) {
+  if (!enable) {
+    restoreArxivZenElements();
+    return;
+  }
+
+  // Hide headers and footer
+  ARXIV_ZEN_HIDE_SELECTORS.forEach((selector) => {
+    const el = document.querySelector(selector);
+    if (el) hideElementForZen(el);
+  });
+
+  // Remove 'active' class from TOC
+  const toc = document.querySelector(ARXIV_TOC_SELECTOR);
+  if (toc && toc.classList.contains('active')) {
+    toc.dataset.maizoneZenTocWasActive = '1';
+    toc.classList.remove('active');
+  }
+}
+
+/**
+ * Restore arXiv elements hidden by Zen mode.
+ * @returns {void}
+ */
+function restoreArxivZenElements() {
+  // Restore hidden elements
+  ARXIV_ZEN_HIDE_SELECTORS.forEach((selector) => {
+    const el = document.querySelector(selector);
+    if (el) restoreElementFromZen(el);
+  });
+
+  // Restore TOC active class if it was removed
+  const toc = document.querySelector(ARXIV_TOC_SELECTOR);
+  if (toc && toc.dataset?.maizoneZenTocWasActive === '1') {
+    toc.classList.add('active');
+    delete toc.dataset.maizoneZenTocWasActive;
+  }
+}
+
+/**
+ * Start observer to re-apply Zen on DOM changes (SPA-like behavior).
+ * @returns {void}
+ */
+function startArxivZenObserver() {
+  if (!isArxivHtmlPage()) return;
+  if (!isArxivZenModeEnabled) return;
+  if (arxivZenObserver) return;
+
+  const root = document.documentElement;
+  if (!root) return;
+
+  arxivZenObserver = new MutationObserver(() => scheduleArxivZenApply());
+  arxivZenObserver.observe(root, { childList: true, subtree: true });
+}
+
+/**
+ * Stop arXiv Zen observer.
+ * @returns {void}
+ */
+function stopArxivZenObserver() {
+  try {
+    arxivZenObserver?.disconnect?.();
+  } catch {
+    // ignore
+  }
+  arxivZenObserver = null;
+  clearTimeout(arxivZenApplyTimeoutId);
+  arxivZenApplyTimeoutId = null;
+}
+
+/**
+ * Debounce arXiv Zen re-apply.
+ * @returns {void}
+ */
+function scheduleArxivZenApply() {
+  if (!isArxivHtmlPage()) return;
+  if (!isArxivZenModeEnabled) return;
+  if (arxivZenApplyTimeoutId) return;
+
+  arxivZenApplyTimeoutId = setTimeout(() => {
+    arxivZenApplyTimeoutId = null;
+    applyArxivZenMode(true);
+  }, 180);
 }
 
 /******************************************************************************
