@@ -92,7 +92,9 @@ export const DEFAULT_DISTRACTING_SITES = [
   'netflix.com',
   'spotify.com',
   'soundcloud.com',
-  'vnexpress.net'
+  'vnexpress.net',
+  'dantri.com.vn',
+  'cafef.vn'
 ];
 
 // Default list of sites blocked in Deep Work mode
