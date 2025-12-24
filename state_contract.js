@@ -15,7 +15,7 @@ export const STATE_KEYS = Object.freeze(Object.keys(DEFAULT_STATE));
 
 // Keys that UI (popup/options) is allowed to mutate via runtime messaging / fallback storage.
 export const UI_ALLOWED_UPDATE_KEYS = Object.freeze([
-  'blockDistractions',
+  'intentGateEnabled',
   'breakReminderEnabled',
   'mindfulnessReminderEnabled',
   'hasSeenOnboarding',
@@ -26,4 +26,4 @@ export const UI_ALLOWED_UPDATE_KEYS = Object.freeze([
 ]);
 
 // Minimal subset exposed to untrusted senders (e.g., content scripts).
-export const UNTRUSTED_STATE_KEYS = Object.freeze(['blockDistractions', 'isInFlow']);
+export const UNTRUSTED_STATE_KEYS = Object.freeze(['isInFlow']);

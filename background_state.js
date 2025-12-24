@@ -9,6 +9,22 @@ import { DEFAULT_STATE, computeNextState, diffState, getDefaultState, sanitizeSt
 import { STATE_KEYS, UI_ALLOWED_UPDATE_KEYS, UNTRUSTED_STATE_KEYS } from './state_contract.js';
 
 const UI_ALLOWED_UPDATE_KEYS_SET = new Set(UI_ALLOWED_UPDATE_KEYS);
+const STATE_KEYS_SET = new Set(Object.keys(DEFAULT_STATE));
+
+// Non-state storage keys/prefixes that should not be deleted on init.
+const NON_STATE_STORAGE_KEYS = new Set(['intentGateReasonLog']);
+const NON_STATE_STORAGE_PREFIXES = ['intentGateTab_', 'intentGatePending_'];
+
+/**
+ * Check whether a storage key should be preserved (state or feature storage).
+ * @param {string} key - Storage key
+ * @returns {boolean}
+ */
+function isAllowedStorageKey(key) {
+  if (STATE_KEYS_SET.has(key)) return true;
+  if (NON_STATE_STORAGE_KEYS.has(key)) return true;
+  return NON_STATE_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
 
 // In-memory state snapshot (hydrated lazily for MV3 reliability).
 let state = getDefaultState();
@@ -94,7 +110,7 @@ function areStateValuesEqual(a, b) {
 function summarizeStateForLog(s) {
   const stateObj = s && typeof s === 'object' ? s : state;
   return {
-    blockDistractions: !!stateObj.blockDistractions,
+    intentGateEnabled: !!stateObj.intentGateEnabled,
     isInFlow: !!stateObj.isInFlow,
     breakReminderEnabled: !!stateObj.breakReminderEnabled,
     distractingSitesCount: Array.isArray(stateObj.distractingSites) ? stateObj.distractingSites.length : 0,
@@ -242,8 +258,7 @@ export function ensureInitialized() {
       });
 
       // Remove unknown keys from storage to avoid stale/deprecated state lingering
-      const allowedKeys = new Set(Object.keys(DEFAULT_STATE));
-      const deprecatedKeys = Object.keys(storedState || {}).filter((key) => !allowedKeys.has(key));
+      const deprecatedKeys = Object.keys(storedState || {}).filter((key) => !isAllowedStorageKey(key));
 
       if (deprecatedKeys.length) {
         await new Promise((resolve) => chrome.storage.local.remove(deprecatedKeys, () => resolve()));

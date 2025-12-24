@@ -1,7 +1,7 @@
 /**
  * MaiZone Browser Extension
  * Options Page Script
- * @feature f01 - Distraction Blocking
+ * @feature f13 - Intent Gate for Distracting Sites
  * @feature f04 - Deep Work Mode
  * @feature f05 - State Management
  */

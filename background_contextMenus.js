@@ -1,8 +1,8 @@
 /**
  * MaiZone Browser Extension
- * Context Menus: Quick actions via right-click menu (block/unblock + copy Markdown helpers)
+ * Context Menus: Quick actions via right-click menu (toggle intent gate list + copy Markdown helpers)
  * @feature f10 - Context Menu Quick Actions
- * @feature f01 - Distraction Blocking (integration)
+ * @feature f13 - Intent Gate for Distracting Sites (integration)
  * @feature f06 - ClipMD (integration-lite)
  */
 
@@ -192,7 +192,7 @@ async function createContextMenus() {
     chrome.contextMenus.create({
       id: MAI_MENU_TOGGLE_BLOCK_SITE_ID,
       parentId: MAI_MENU_ROOT_ID,
-      title: 'Chặn trang này',
+      title: 'Hỏi lý do cho trang này',
       contexts: ['page']
     });
 
@@ -222,7 +222,7 @@ async function createContextMenus() {
 }
 
 /**
- * Update block/unblock title right before the menu shows (best-effort).
+ * Update intent gate toggle title right before the menu shows (best-effort).
  * @param {chrome.contextMenus.OnShownInfo} info - OnShown info
  * @param {chrome.tabs.Tab} tab - Current tab
  * @returns {void}
@@ -241,7 +241,7 @@ function handleContextMenusShown(info, tab) {
     const list = Array.isArray(distractingSites) ? distractingSites : [];
     const isBlocked = enabled ? list.includes(hostname) : false;
 
-    const title = isBlocked ? 'Bỏ chặn trang này' : 'Chặn trang này';
+    const title = isBlocked ? 'Bỏ hỏi lý do cho trang này' : 'Hỏi lý do cho trang này';
 
     try {
       chrome.contextMenus.update(MAI_MENU_TOGGLE_BLOCK_SITE_ID, { title, enabled });
@@ -253,7 +253,7 @@ function handleContextMenusShown(info, tab) {
 }
 
 /**
- * Handle block/unblock toggle for a tab.
+ * Handle intent gate list toggle for a tab.
  * @param {chrome.tabs.Tab} tab - Current tab
  * @returns {Promise<void>}
  */
@@ -274,16 +274,16 @@ async function handleToggleBlockSite(tab) {
   const ok = await updateState({ distractingSites: nextSites });
 
   if (!ok) {
-    await sendMaiToastToTab(tabId, '🌸 Mai gặp lỗi khi cập nhật danh sách chặn.');
+    await sendMaiToastToTab(tabId, '🌸 Mai gặp lỗi khi cập nhật danh sách hỏi lý do.');
     return;
   }
 
   if (isBlocked) {
-    await sendMaiToastToTab(tabId, `🌸 Đã bỏ chặn ${hostname}.`);
+    await sendMaiToastToTab(tabId, `🌸 Đã bỏ hỏi lý do ${hostname}.`);
     return;
   }
 
-  await sendMaiToastToTab(tabId, `🌸 Đã chặn ${hostname}.`);
+  await sendMaiToastToTab(tabId, `🌸 Đã bật hỏi lý do cho ${hostname}.`);
 }
 
 /**
@@ -422,4 +422,3 @@ export function initContextMenus() {
 
   createContextMenus().catch(() => {});
 }
-

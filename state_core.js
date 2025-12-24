@@ -12,7 +12,7 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 export const DEFAULT_STATE = Object.freeze({
   currentTask: '',
   isInFlow: false,
-  blockDistractions: true,
+  intentGateEnabled: true,
   breakReminderEnabled: false,
   mindfulnessReminderEnabled: false,
   hasSeenOnboarding: false,
@@ -207,7 +207,7 @@ export function sanitizeStoredState(storedState) {
   const merged = {
     currentTask: normalizeTask(stored.currentTask, base.currentTask),
     isInFlow: normalizeBoolean(stored.isInFlow, base.isInFlow),
-    blockDistractions: normalizeBoolean(stored.blockDistractions, base.blockDistractions),
+    intentGateEnabled: normalizeBoolean(stored.intentGateEnabled, base.intentGateEnabled),
     breakReminderEnabled: normalizeBoolean(stored.breakReminderEnabled, base.breakReminderEnabled),
     mindfulnessReminderEnabled: normalizeBoolean(stored.mindfulnessReminderEnabled, base.mindfulnessReminderEnabled),
     hasSeenOnboarding: normalizeBoolean(stored.hasSeenOnboarding, base.hasSeenOnboarding),
@@ -238,8 +238,8 @@ export function computeNextState(currentState, updates) {
 
   if ('currentTask' in updates) sanitized.currentTask = normalizeTask(updates.currentTask, current.currentTask);
   if ('isInFlow' in updates) sanitized.isInFlow = normalizeBoolean(updates.isInFlow, current.isInFlow);
-  if ('blockDistractions' in updates) {
-    sanitized.blockDistractions = normalizeBoolean(updates.blockDistractions, current.blockDistractions);
+  if ('intentGateEnabled' in updates) {
+    sanitized.intentGateEnabled = normalizeBoolean(updates.intentGateEnabled, current.intentGateEnabled);
   }
   if ('breakReminderEnabled' in updates) {
     sanitized.breakReminderEnabled = normalizeBoolean(updates.breakReminderEnabled, current.breakReminderEnabled);

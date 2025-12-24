@@ -5,7 +5,7 @@ import { computeNextState, diffState, getDefaultState, sanitizeStoredState } fro
 
 test('sanitizeStoredState uses safe defaults', () => {
   const state = sanitizeStoredState({});
-  assert.equal(state.blockDistractions, true);
+  assert.equal(state.intentGateEnabled, true);
   assert.equal(state.isInFlow, false);
   assert.ok(Array.isArray(state.distractingSites));
   assert.ok(state.distractingSites.includes('facebook.com'));

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getDistractionMatch, getHostnameFromUrl, isHostnameInList } from '../distraction_matcher.js';
+import { getHostnameFromUrl, isHostnameInList } from '../distraction_matcher.js';
+import { getIntentGateMatch } from '../intent_gate_helpers.js';
 
 test('getHostnameFromUrl normalizes hostnames', () => {
   assert.equal(getHostnameFromUrl('https://WWW.FACEBOOK.COM/some/path?x=1'), 'facebook.com');
@@ -16,44 +17,41 @@ test('isHostnameInList matches exact and subdomains', () => {
   assert.equal(isHostnameInList('notfacebook.com', sites), false);
 });
 
-test('getDistractionMatch detects standard distracting sites', () => {
+test('getIntentGateMatch detects standard distracting sites', () => {
   const state = {
-    blockDistractions: true,
     isInFlow: false,
     distractingSites: ['facebook.com'],
     deepWorkBlockedSites: ['messenger.com']
   };
 
-  const match = getDistractionMatch('https://facebook.com', state);
-  assert.equal(match.isDistracting, true);
+  const match = getIntentGateMatch('https://facebook.com', state);
+  assert.equal(match.shouldGate, true);
   assert.equal(match.isDeepWorkBlocked, false);
   assert.equal(match.hostname, 'facebook.com');
 });
 
-test('getDistractionMatch detects deep work blocked sites only in flow', () => {
+test('getIntentGateMatch detects deep work blocked sites only in flow', () => {
   const baseState = {
-    blockDistractions: true,
     distractingSites: ['facebook.com'],
     deepWorkBlockedSites: ['messenger.com']
   };
 
-  const notInFlow = getDistractionMatch('https://messenger.com', { ...baseState, isInFlow: false });
-  assert.equal(notInFlow.isDistracting, false);
+  const notInFlow = getIntentGateMatch('https://messenger.com', { ...baseState, isInFlow: false });
+  assert.equal(notInFlow.shouldGate, false);
   assert.equal(notInFlow.isDeepWorkBlocked, false);
 
-  const inFlow = getDistractionMatch('https://messenger.com', { ...baseState, isInFlow: true });
-  assert.equal(inFlow.isDistracting, true);
+  const inFlow = getIntentGateMatch('https://messenger.com', { ...baseState, isInFlow: true });
+  assert.equal(inFlow.shouldGate, true);
   assert.equal(inFlow.isDeepWorkBlocked, true);
 });
 
-test('getDistractionMatch respects disabled settings', () => {
+test('getIntentGateMatch returns false when site not in lists', () => {
   const state = {
-    blockDistractions: false,
     isInFlow: true,
     distractingSites: ['facebook.com'],
     deepWorkBlockedSites: ['messenger.com']
   };
 
-  const match = getDistractionMatch('https://facebook.com', state);
-  assert.equal(match.isDistracting, false);
+  const match = getIntentGateMatch('https://example.com', state);
+  assert.equal(match.shouldGate, false);
 });

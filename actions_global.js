@@ -10,10 +10,6 @@
 
 // Keep this list aligned with `actions.js` (ESM) to avoid string drift across contexts.
 globalThis.MAIZONE_ACTIONS = Object.freeze({
-  checkCurrentUrl: 'checkCurrentUrl',
-  youtubeNavigation: 'youtubeNavigation',
-  closeTab: 'closeTab',
-  distractingWebsite: 'distractingWebsite',
   maiToast: 'maiToast',
   mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
@@ -21,6 +17,8 @@ globalThis.MAIZONE_ACTIONS = Object.freeze({
   resetBreakReminder: 'resetBreakReminder',
   getBreakReminderState: 'getBreakReminderState',
   breakReminderBadgeTick: 'breakReminderBadgeTick',
+  intentGateAllowAccess: 'intentGateAllowAccess',
+  intentGateGetReasonLog: 'intentGateGetReasonLog',
   getState: 'getState',
   updateState: 'updateState',
   stateUpdated: 'stateUpdated'

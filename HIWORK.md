@@ -20,7 +20,7 @@ Những tên file chuẩn khi xây dựng browser extension:
 
 ### `background.js`
 - **Phạm vi**: Chạy ở nền, độc lập với trang web
-- **Nhiệm vụ**: Quản lý trạng thái, xử lý logic (nhắc nghỉ, kiểm tra trang web), lưu trữ cài đặt
+- **Nhiệm vụ**: Quản lý trạng thái, xử lý logic (nhắc nghỉ, hỏi lý do trước khi mở trang), lưu trữ cài đặt
 - **Vòng đời**: MV3 Service Worker (có thể ngủ/được đánh thức theo event: message, webNavigation, alarms...)
 - **Giao tiếp**: Tương tác với tất cả content scripts, quản lý API trình duyệt
 - **API**: Truy cập đầy đủ API Chrome (tabs, storage, alerts, network)
@@ -51,16 +51,10 @@ Những tên file chuẩn khi xây dựng browser extension:
 Extension sử dụng hệ thống truyền tin để giao tiếp giữa các thành phần:
 
 ```javascript
-// Từ content.js đến background.js
+// Từ intent_gate.js đến background.js
 sendMessageSafely({
-  action: 'checkCurrentUrl',
-  data: { url: window.location.href }
-});
-
-// Từ background.js đến content.js
-sendMessageToTabSafely(tabId, {
-  action: 'distractingWebsite',
-  data: { /* dữ liệu cảnh báo */ }
+  action: 'intentGateAllowAccess',
+  data: { tabId, reason }
 });
 ```
 
@@ -82,7 +76,7 @@ sendMessageToTabSafely(tabId, {
   - `"omnibox": { "keyword": "mai" }`
 - **Cách dùng**: gõ `mai` + Space/Tab → nhập lệnh → Enter.
 - **Lệnh hỗ trợ**:
-  - `on` / `off`: bật/tắt `blockDistractions`
+  - `on` / `off`: bật/tắt hỏi lý do khi mở web sao nhãng
   - `deepwork 40 [task]`: bắt đầu Deep Work với số phút tuỳ chọn (1–1440); `[task]` có thể bỏ trống
   - `stop`: dừng Deep Work (reset task + timer)
   - `mind on` / `mind off`: bật/tắt nhắc mindfulness

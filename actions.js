@@ -9,10 +9,6 @@
 /***** ACTION NAMES *****/
 
 export const messageActions = Object.freeze({
-  checkCurrentUrl: 'checkCurrentUrl',
-  youtubeNavigation: 'youtubeNavigation',
-  closeTab: 'closeTab',
-  distractingWebsite: 'distractingWebsite',
   maiToast: 'maiToast',
   mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
@@ -20,6 +16,8 @@ export const messageActions = Object.freeze({
   resetBreakReminder: 'resetBreakReminder',
   getBreakReminderState: 'getBreakReminderState',
   breakReminderBadgeTick: 'breakReminderBadgeTick',
+  intentGateAllowAccess: 'intentGateAllowAccess',
+  intentGateGetReasonLog: 'intentGateGetReasonLog',
   getState: 'getState',
   updateState: 'updateState',
   stateUpdated: 'stateUpdated'

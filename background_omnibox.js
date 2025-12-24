@@ -2,7 +2,7 @@
  * MaiZone Browser Extension
  * Omnibox Commands: "mai" keyword → address bar quick commands
  * @feature f11 - Omnibox Commands
- * @feature f01 - Distraction Blocking (integration)
+ * @feature f13 - Intent Gate for Distracting Sites (integration)
  * @feature f04 - Deep Work Mode (integration)
  * @feature f06 - ClipMD (integration)
  * @feature f08 - Mindfulness Reminders (integration)
@@ -229,11 +229,11 @@ function buildSuggestions(rawInput, state) {
   const firstToken = normalized.split(' ')[0] || '';
 
   const s = state && typeof state === 'object' ? state : {};
-  const blockOn = !!s.blockDistractions;
+  const gateOn = !!s.intentGateEnabled;
   const mindOn = !!s.mindfulnessReminderEnabled;
   const inFlow = !!(s.isInFlow && String(s.currentTask || '').trim());
 
-  const statusBlock = blockOn ? 'đang bật' : 'đang tắt';
+  const statusGate = gateOn ? 'đang bật' : 'đang tắt';
   const statusMind = mindOn ? 'đang bật' : 'đang tắt';
   const statusFlow = inFlow ? 'đang Deep Work' : 'chưa Deep Work';
 
@@ -246,12 +246,12 @@ function buildSuggestions(rawInput, state) {
 
   // Order by current state (suggest the "next likely action" first).
   if (!firstToken || 'on'.startsWith(firstToken) || 'off'.startsWith(firstToken)) {
-    if (blockOn) {
-      push('off', 'Tắt chặn sao nhãng', statusBlock);
-      push('on', 'Bật chặn sao nhãng', statusBlock);
+    if (gateOn) {
+      push('off', 'Tắt hỏi lý do khi mở web sao nhãng', statusGate);
+      push('on', 'Bật hỏi lý do khi mở web sao nhãng', statusGate);
     } else {
-      push('on', 'Bật chặn sao nhãng', statusBlock);
-      push('off', 'Tắt chặn sao nhãng', statusBlock);
+      push('on', 'Bật hỏi lý do khi mở web sao nhãng', statusGate);
+      push('off', 'Tắt hỏi lý do khi mở web sao nhãng', statusGate);
     }
   }
 
@@ -366,8 +366,10 @@ async function handleOmniboxInputEntered(text, disposition) {
 
   try {
     if (command.kind === 'toggleBlock') {
-      await updateState({ blockDistractions: !!command.enabled });
-      const note = command.enabled ? 'Đã bật chặn sao nhãng.' : 'Đã tắt chặn sao nhãng.';
+      await updateState({ intentGateEnabled: !!command.enabled });
+      const note = command.enabled
+        ? 'Đã bật hỏi lý do khi mở web sao nhãng.'
+        : 'Đã tắt hỏi lý do khi mở web sao nhãng.';
       const ok = await showMaiToastOnActiveTab(`🌸 ${note}`);
       if (!ok) showNotification(note);
       return;
@@ -471,4 +473,3 @@ export function initOmnibox() {
 
   console.log('🌸 Omnibox commands ready (keyword: "mai")');
 }
-

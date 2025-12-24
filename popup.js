@@ -5,6 +5,7 @@
  * @feature f04 - Deep Work Mode (UI part)
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f08 - Mindfulness Reminders (UI part)
+ * @feature f13 - Intent Gate for Distracting Sites (UI part)
  */
 
 import { sendMessageSafely } from './messaging.js';
@@ -17,7 +18,7 @@ import { CLIPMD_POPUP_PORT_NAME } from './constants.js';
  ******************************************************************************/
 
 // Reference đến các DOM elements chính
-const blockDistractionsToggle = document.getElementById('block-distractions-toggle'); // Toggle chặn trang web gây sao nhãng
+const intentGateToggle = document.getElementById('intent-gate-toggle'); // Toggle hỏi lý do khi mở trang web gây sao nhãng
 const breakReminderToggle = document.getElementById('break-reminder-toggle');      // Toggle nhắc nhở nghỉ ngơi
 const mindfulnessReminderToggle = document.getElementById('mindfulness-reminder-toggle'); // Toggle nhắc nhở mindfulness
 const helpButton = document.getElementById('help-button');                               // Nút mở hướng dẫn nhanh
@@ -47,7 +48,7 @@ function initializePopup() {
 
   // Đăng ký các event listeners
   console.log('🌸 Registering event listeners...');
-  blockDistractionsToggle.addEventListener('change', () => handleToggle('blockDistractions'));
+  intentGateToggle?.addEventListener('change', () => handleToggle('intentGateEnabled'));
   breakReminderToggle.addEventListener('change', () => handleToggle('breakReminderEnabled'));
   mindfulnessReminderToggle.addEventListener('change', () => handleToggle('mindfulnessReminderEnabled'));
   helpButton?.addEventListener('click', openOnboarding);
@@ -172,7 +173,7 @@ function setBreakReminderLabelText(text) {
  */
 function loadState() {
   const defaults = {
-    blockDistractions: true,
+    intentGateEnabled: true,
     breakReminderEnabled: false,
     mindfulnessReminderEnabled: false,
     isInFlow: false,
@@ -192,7 +193,7 @@ function loadState() {
  */
 function updateUI(state) {
   // Update toggles
-  blockDistractionsToggle.checked = state.blockDistractions;
+  if (intentGateToggle) intentGateToggle.checked = !!state.intentGateEnabled;
   breakReminderToggle.checked = state.breakReminderEnabled;
   mindfulnessReminderToggle.checked = state.mindfulnessReminderEnabled;
   
@@ -209,8 +210,8 @@ function updateUI(state) {
  */
 function handleStateUpdate(updates) {
   // Only update relevant UI elements for the changes
-  if ('blockDistractions' in updates) {
-    blockDistractionsToggle.checked = updates.blockDistractions;
+  if ('intentGateEnabled' in updates && intentGateToggle) {
+    intentGateToggle.checked = updates.intentGateEnabled;
   }
   
   if ('breakReminderEnabled' in updates) {
@@ -239,14 +240,14 @@ function handleStateUpdate(updates) {
 
 /**
  * Handle toggle changes
- * @feature f01 - Distraction Blocking
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  * @feature f05 - State Management
+ * @feature f13 - Intent Gate for Distracting Sites
  */
 function handleToggle(settingKey) {
   const toggleMap = {
-    'blockDistractions': blockDistractionsToggle,
+    'intentGateEnabled': intentGateToggle,
     'breakReminderEnabled': breakReminderToggle,
     'mindfulnessReminderEnabled': mindfulnessReminderToggle
   };

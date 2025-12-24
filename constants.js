@@ -1,7 +1,7 @@
 /**
  * MaiZone Browser Extension
  * Constants: Centralized configuration values
- * @feature f01 - Distraction Blocking
+ * @feature f13 - Intent Gate for Distracting Sites
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  * @feature f06 - ClipMD (Clipboard to Markdown)
@@ -77,7 +77,7 @@ export const MINDFULNESS_STRETCH_REMINDERS = [
 ];
 
 /******************************************************************************
- * DEFAULT SITE LISTS [f01] [f04]
+ * DEFAULT SITE LISTS [f13] [f04]
  ******************************************************************************/
 
 // Default list of distracting sites
@@ -85,6 +85,7 @@ export const DEFAULT_DISTRACTING_SITES = [
   'youtube.com',
   'facebook.com',
   'twitter.com',
+  'x.com',
   'instagram.com',
   'reddit.com',
   'tiktok.com',

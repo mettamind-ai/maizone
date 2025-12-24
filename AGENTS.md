@@ -129,7 +129,7 @@
 
 - Smoke test (manual):
   - **Reload extension (không reinstall)** tại `chrome://extensions` (Developer mode → Reload)
-  - **Tab mới**: mở `https://facebook.com` (hoặc domain chắc chắn nằm trong `distractingSites`) → overlay phải xuất hiện
-  - **Tab cũ** (đã mở trước khi reload): navigate tới cùng domain → overlay vẫn phải xuất hiện
-  - **Toggle state**: tắt `blockDistractions` → reload trang → overlay không xuất hiện; bật lại → reload → overlay xuất hiện
-  - **MV3 cold start**: “Inspect views / Service worker” → **Stop** service worker, rồi mở lại `https://facebook.com` để chắc chắn SW wake + chặn vẫn hoạt động
+  - **Tab mới**: mở `https://facebook.com` (hoặc domain chắc chắn nằm trong `distractingSites`) → trang hỏi lý do phải xuất hiện
+  - **Tab cũ** (đã mở trước khi reload): navigate tới cùng domain → trang hỏi lý do vẫn phải xuất hiện
+  - **Toggle state**: tắt `intentGateEnabled` → reload trang → không hiện trang hỏi lý do; bật lại → reload → hiện lại
+  - **MV3 cold start**: “Inspect views / Service worker” → **Stop** service worker, rồi mở lại `https://facebook.com` để chắc chắn SW wake + intent gate vẫn hoạt động

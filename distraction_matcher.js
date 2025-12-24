@@ -1,7 +1,7 @@
 /**
  * MaiZone Browser Extension
  * Distraction Matcher: Pure helpers for URL/hostname matching (no chrome APIs)
- * @feature f01 - Distraction Blocking
+ * @feature f13 - Intent Gate for Distracting Sites
  * @feature f04c - Deep Work Mode Integration
  */
 
@@ -53,36 +53,4 @@ export function isHostnameInList(hostname, sites) {
     if (!s) return false;
     return host === s || host.endsWith('.' + s);
   });
-}
-
-/***** MATCH COMPUTATION *****/
-
-/**
- * Compute distraction match information for a URL given current state.
- * @param {string} url - Full URL
- * @param {Object} state - Current state snapshot
- * @returns {{hostname: string, isDistracting: boolean, isDeepWorkBlocked: boolean}}
- */
-export function getDistractionMatch(url, state) {
-  const s = state && typeof state === 'object' ? state : {};
-
-  if (!s.blockDistractions) {
-    return { hostname: '', isDistracting: false, isDeepWorkBlocked: false };
-  }
-
-  const hostname = getHostnameFromUrl(url);
-  if (!hostname) return { hostname: '', isDistracting: false, isDeepWorkBlocked: false };
-
-  const distractingSites = Array.isArray(s.distractingSites) ? s.distractingSites : [];
-  const deepWorkBlockedSites = Array.isArray(s.deepWorkBlockedSites) ? s.deepWorkBlockedSites : [];
-  const isInFlow = !!s.isInFlow;
-
-  const isStandardDistracting = isHostnameInList(hostname, distractingSites);
-  const isDeepWorkBlocked = isInFlow && isHostnameInList(hostname, deepWorkBlockedSites);
-
-  return {
-    hostname,
-    isDistracting: isStandardDistracting || isDeepWorkBlocked,
-    isDeepWorkBlocked
-  };
 }

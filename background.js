@@ -1,7 +1,6 @@
 /**
  * MaiZone Browser Extension
  * Background Script: Central coordinator for all extension features
- * @feature f01 - Distraction Blocking
  * @feature f03 - Break Reminder
  * @feature f04 - Deep Work Mode
  * @feature f05 - State Management
@@ -10,15 +9,16 @@
  * @feature f09 - Onboarding
  * @feature f10 - Context Menu Quick Actions
  * @feature f11 - Omnibox Commands
+ * @feature f13 - Intent Gate for Distracting Sites
  */
 
 import { ensureInitialized, setupStateListeners, updateState } from './background_state.js';
-import { initDistraction } from './background_distraction.js';
 import { initBreakReminder, sendBreakReminder } from './background_breakReminder.js';
 import { initMindfulnessReminder, sendMindfulnessToast } from './background_mindfulnessReminder.js';
 import { initClipmd, startClipmdMarkdownPicker } from './background_clipmd.js';
 import { initContextMenus } from './background_contextMenus.js';
 import { initOmnibox } from './background_omnibox.js';
+import { initIntentGate } from './background_intentGate.js';
 import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './constants.js';
 
 /**
@@ -29,7 +29,7 @@ import { DEFAULT_DISTRACTING_SITES, DEFAULT_DEEPWORK_BLOCKED_SITES } from './con
 function summarizeStateForLog(state) {
   const s = state && typeof state === 'object' ? state : {};
   return {
-    blockDistractions: !!s.blockDistractions,
+    intentGateEnabled: !!s.intentGateEnabled,
     isInFlow: !!s.isInFlow,
     breakReminderEnabled: !!s.breakReminderEnabled,
     mindfulnessReminderEnabled: !!s.mindfulnessReminderEnabled
@@ -47,7 +47,7 @@ function initBackgroundScript() {
     setupStateListeners();
     
     // Initialize feature modules
-    initDistraction();
+    initIntentGate();
     initBreakReminder();
     initMindfulnessReminder();
     initClipmd();
@@ -230,7 +230,7 @@ async function injectContentScriptsIntoExistingTabs() {
 async function setupDefaultSettings() {
   try {
     await updateState({
-      blockDistractions: true,
+      intentGateEnabled: true,
       breakReminderEnabled: false,
       distractingSites: DEFAULT_DISTRACTING_SITES,
       deepWorkBlockedSites: DEFAULT_DEEPWORK_BLOCKED_SITES

@@ -15,9 +15,9 @@ import { MINDFULNESS_QUOTES, MINDFULNESS_STRETCH_REMINDERS } from './constants.j
 
 /***** ELEMENT REFERENCES *****/
 
-const blockToggle = document.getElementById('onb-block-toggle');
+const intentToggle = document.getElementById('onb-intent-toggle');
 const openOptionsBtn = document.getElementById('onb-open-options');
-const blockStatusEl = document.getElementById('onb-block-status');
+const intentStatusEl = document.getElementById('onb-intent-status');
 
 const taskInput = document.getElementById('onb-task-input');
 const startDeepWorkBtn = document.getElementById('onb-start-deepwork');
@@ -33,7 +33,7 @@ const finishBtn = document.getElementById('onb-finish');
 /***** LOCAL UI STATE *****/
 
 let currentState = {
-  blockDistractions: true,
+  intentGateEnabled: true,
   mindfulnessReminderEnabled: false,
   isInFlow: false,
   currentTask: ''
@@ -65,9 +65,9 @@ function initOnboarding() {
  * @returns {void}
  */
 function bindEvents() {
-  blockToggle?.addEventListener('change', () => {
-    updateStateSafely({ blockDistractions: !!blockToggle.checked });
-    setStatus(blockStatusEl, blockToggle.checked ? 'Đã bật.' : 'Đã tắt.', blockToggle.checked ? 'ok' : '');
+  intentToggle?.addEventListener('change', () => {
+    updateStateSafely({ intentGateEnabled: !!intentToggle.checked });
+    setStatus(intentStatusEl, intentToggle.checked ? 'Đã bật.' : 'Đã tắt.', intentToggle.checked ? 'ok' : '');
   });
 
   openOptionsBtn?.addEventListener('click', () => {
@@ -116,7 +116,7 @@ function bindEvents() {
  * @returns {void}
  */
 function loadState() {
-  getStateSafely(['blockDistractions', 'mindfulnessReminderEnabled', 'isInFlow', 'currentTask'])
+  getStateSafely(['intentGateEnabled', 'mindfulnessReminderEnabled', 'isInFlow', 'currentTask'])
     .then((state) => {
       currentState = { ...currentState, ...(state || {}) };
       applyStateToUi(currentState);
@@ -143,9 +143,9 @@ function handleStateDelta(delta) {
  * @returns {void}
  */
 function applyStateToUi(state) {
-  const blockOn = !!state.blockDistractions;
-  if (blockToggle) blockToggle.checked = blockOn;
-  setStatus(blockStatusEl, blockOn ? 'Đang bật.' : 'Đang tắt.', blockOn ? 'ok' : '');
+  const intentOn = !!state.intentGateEnabled;
+  if (intentToggle) intentToggle.checked = intentOn;
+  setStatus(intentStatusEl, intentOn ? 'Đang bật.' : 'Đang tắt.', intentOn ? 'ok' : '');
 
   const mindfulnessOn = !!state.mindfulnessReminderEnabled;
   if (mindfulnessToggle) mindfulnessToggle.checked = mindfulnessOn;
@@ -368,7 +368,7 @@ async function testMindfulnessToast() {
 async function markOnboardingDone({ closeTab = false } = {}) {
   await updateStateSafely({ hasSeenOnboarding: true });
 
-  setStatus(blockStatusEl, blockToggle?.checked ? 'Đang bật.' : 'Đang tắt.', blockToggle?.checked ? 'ok' : '');
+  setStatus(intentStatusEl, intentToggle?.checked ? 'Đang bật.' : 'Đang tắt.', intentToggle?.checked ? 'ok' : '');
   setStatus(mindfulnessStatusEl, mindfulnessToggle?.checked ? 'Đang bật.' : 'Đang tắt.', mindfulnessToggle?.checked ? 'ok' : '');
   setStatus(deepWorkStatusEl, 'Xong rồi! Bạn có thể đóng tab này và mở popup để bắt đầu.', 'ok');
 

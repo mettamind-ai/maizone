@@ -328,7 +328,7 @@
         <div class="logo">🌸</div>
         <div>
           <h1>Chào mừng đến MaiZone</h1>
-          <p>Một hướng dẫn siêu nhẹ để bạn bắt đầu: chặn sao nhãng → 1 task → vào flow.</p>
+          <p>Một hướng dẫn siêu nhẹ để bạn bắt đầu: hỏi lý do → 1 task → vào flow.</p>
           <div class="privacy-note">
             <span class="badge">🔒 Privacy-first</span>
             <span>Mai <b>không</b> đọc password, <b>không</b> gửi dữ liệu ra ngoài.</span>
@@ -337,21 +337,21 @@
       </header>
 
       <section class="cards">
-        <!-- Card 1: Distraction blocking -->
-        <article class="card" id="card-blocking">
+        <!-- Card 1: Intent gate -->
+        <article class="card" id="card-intent">
           <div class="card-top">
             <div class="step">1</div>
-            <h2 class="card-title">Chặn sao nhãng</h2>
-            <label class="switch" title="Bật/tắt chặn sao nhãng">
-              <input type="checkbox" id="onb-block-toggle" />
+            <h2 class="card-title">Hỏi lý do khi mở web sao nhãng</h2>
+            <label class="switch" title="Bật/tắt hỏi lý do khi mở web sao nhãng">
+              <input type="checkbox" id="onb-intent-toggle" />
               <span class="slider"></span>
             </label>
           </div>
-          <p class="card-desc">Mai sẽ nhắc/chặn khi bạn vào các trang dễ cuốn (YouTube, Facebook, TikTok...).</p>
+          <p class="card-desc">Mai sẽ hỏi lý do trước khi mở các trang dễ cuốn (YouTube, Facebook, TikTok...).</p>
           <div class="row">
             <div class="row-left">
               <button class="link" id="onb-open-options">Chỉnh danh sách trang</button>
-              <span class="status" id="onb-block-status"></span>
+              <span class="status" id="onb-intent-status"></span>
             </div>
           </div>
         </article>

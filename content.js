@@ -2,9 +2,7 @@
  * MaiZone Browser Extension
  * Content Script: Monitors text input fields, displays UI elements
  * @feature f00 - Text Input Detection
- * @feature f01 - Distraction Blocking (UI part)
  * @feature f03 - Break Reminder (badge ticker fallback)
- * @feature f04c - Deep Work Mode Integration
  * @feature f06 - ClipMD (Clipboard to Markdown)
  * @feature f07 - ChatGPT Zen Hotkeys (chatgpt.com)
  * @feature f08 - Mindfulness Reminders (toast)
@@ -98,10 +96,6 @@ const OPERA_BADGE_PORT_KEEPALIVE_MS = 25_000;
 
 // Message actions (prefer shared global injected via `actions_global.js`).
 const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
-  checkCurrentUrl: 'checkCurrentUrl',
-  youtubeNavigation: 'youtubeNavigation',
-  closeTab: 'closeTab',
-  distractingWebsite: 'distractingWebsite',
   maiToast: 'maiToast',
   mindfulnessToast: 'mindfulnessToast',
   clipmdStart: 'clipmdStart',
@@ -118,7 +112,6 @@ const messageActions = globalThis.MAIZONE_ACTIONS || Object.freeze({
 let currentElement = null;
 let lastContentLength = 0;
 let typingTimer = null;
-let isDistractionBlockingEnabled = true;
 let domListenersAttached = false;
 
 // [f03] Opera badge tick fallback state
@@ -142,18 +135,11 @@ let mindfulnessAudioContext = null;
 let mindfulnessAudioUnlocked = false;
 let hasRegisteredMindfulnessAudioUnlock = false;
 
-// YouTube SPA monitoring
-let youtubeObserver = null;
-let youtubeFallbackIntervalId = null;
-let lastYoutubeUrl = '';
-
 // Generic Mai toast (non-mindfulness)
 let maiToastTimeoutId = null;
 let maiToastFadeTimeoutId = null;
 
-// [f01] When lists/flow change while tab is hidden, defer re-check until visible to avoid
-// showing an auto-close warning in background tabs.
-let pendingDistractionRecheckWhenVisible = false;
+// (reserved for future feature flags)
 
 /******************************************************************************
  * INITIALIZATION
@@ -171,11 +157,8 @@ function initialize() {
 
   // Load settings early so we can avoid unnecessary work for disabled features
   chrome.storage.local.get(
-    ['blockDistractions', CHATGPT_ZEN_STORAGE_KEY, ARXIV_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
+    [CHATGPT_ZEN_STORAGE_KEY, ARXIV_ZEN_STORAGE_KEY, 'isInFlow', 'breakReminderEnabled', 'currentTask'],
     (result) => {
-      const { blockDistractions } = result || {};
-      isDistractionBlockingEnabled = typeof blockDistractions === 'boolean' ? blockDistractions : true;
-
       const rawChatgptZenMode = result?.[CHATGPT_ZEN_STORAGE_KEY];
       isChatgptZenModeEnabled = typeof rawChatgptZenMode === 'boolean' ? rawChatgptZenMode : false;
 
@@ -193,18 +176,6 @@ function initialize() {
 
   // [f04c] Listen for deep work status changes and settings
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.blockDistractions) {
-      isDistractionBlockingEnabled = !!changes.blockDistractions.newValue;
-
-      if (!isDistractionBlockingEnabled) {
-        stopYouTubeNavigationObserver();
-        document.getElementById('mai-distraction-warning')?.remove?.();
-      } else if (window.location.hostname.includes('youtube.com')) {
-        startYouTubeNavigationObserver();
-        checkIfDistractingSite();
-      }
-    }
-
     if (changes[CHATGPT_ZEN_STORAGE_KEY]) {
       const nextValue = changes[CHATGPT_ZEN_STORAGE_KEY]?.newValue;
       isChatgptZenModeEnabled = typeof nextValue === 'boolean' ? nextValue : false;
@@ -219,16 +190,6 @@ function initialize() {
 
     if (changes.isInFlow) {
       console.log('🌸 Deep Work status changed:', changes.isInFlow.newValue);
-      // Khi trạng thái flow thay đổi, kiểm tra lại URL hiện tại để áp dụng chặn trang nhắn tin (f04c)
-      scheduleDistractionRecheck();
-    }
-
-    if (changes.distractingSites) {
-      scheduleDistractionRecheck();
-    }
-
-    if (changes.deepWorkBlockedSites) {
-      scheduleDistractionRecheck();
     }
 
     // [f03] Opera badge tick fallback: sync on any timer-related change.
@@ -258,7 +219,6 @@ function attachDomListeners() {
   document.addEventListener('click', handleClick);
   document.addEventListener('visibilitychange', () => {
     syncOperaBadgeTickFallback();
-    if (document.visibilityState === 'visible') runPendingDistractionRecheck();
   });
   setupMindfulnessAudioUnlockListeners();
 
@@ -272,15 +232,8 @@ function attachDomListeners() {
 function syncContentScriptActiveState() {
   attachDomListeners();
 
-  if (isDistractionBlockingEnabled && window.location.hostname.includes('youtube.com')) {
-    startYouTubeNavigationObserver();
-  } else {
-    stopYouTubeNavigationObserver();
-  }
-
   syncChatgptHelperActiveState();
   syncArxivZenActiveState();
-  checkIfDistractingSite();
 }
 
 /******************************************************************************
@@ -1559,12 +1512,7 @@ function handleBackgroundMessages(message, sender, sendResponse) {
     return true;
   }
 
-  if (message?.action !== messageActions.distractingWebsite) return false;
-  if (!isDistractionBlockingEnabled) return false;
-
-  showDistractionWarning(message.data);
-  sendResponse({ received: true });
-  return true;
+  return false;
 }
 
 /******************************************************************************
@@ -1742,329 +1690,6 @@ function startClipmdPickMode() {
   }
 }
 
-/******************************************************************************
- * UI COMPONENTS
- ******************************************************************************/
-
-/**
- * [f01][f04c] Hiển thị cảnh báo khi truy cập trang web gây sao nhãng hoặc nhắn tin trong Deep Work mode
- * Cài đặt hiển thị UI với thiết kế khác nhau cho trang thông thường (f01) và trang nhắn tin trong Deep Work (f04c)
- * @param {Object} data - Dữ liệu cảnh báo gồm URL, loại cảnh báo và trạng thái
- */
-function showDistractionWarning(data) {
-  if (!data) {
-    console.error('🌸🌸🌸 No data provided for warning');
-    return;
-  }
-
-  // Log minimal info (privacy-first: avoid logging full URL/message).
-  console.log('🌸 Showing distraction warning:', {
-    isDeepWorkBlocked: !!data.isDeepWorkBlocked,
-    isInDeepWorkMode: !!data.isInDeepWorkMode
-  });
-
-  // Remove existing warning
-  const existingWarning = document.getElementById('mai-distraction-warning');
-  if (existingWarning) existingWarning.remove();
-
-  const warningDiv = document.createElement('div');
-  warningDiv.id = 'mai-distraction-warning';
-  
-  // Thay đổi màu nền tùy thuộc vào loại cảnh báo
-  const bgColor = data.isDeepWorkBlocked && data.isInDeepWorkMode 
-    ? 'rgba(138, 43, 226, 0.95)' // Tím đậm cho Deep Work mode
-    : 'rgba(255, 143, 171, 0.95)'; // Hồng cho distractions thông thường
-  
-  Object.assign(warningDiv.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '100%',
-    height: '50vh',
-    backgroundColor: bgColor,
-    color: 'white',
-    padding: '20px',
-    textAlign: 'center',
-    zIndex: '9999999',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    fontSize: '20px',
-    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center'
-  });
-
-  // Tùy chỉnh icon và nội dung dựa trên loại cảnh báo
-  const icon = data.isDeepWorkBlocked && data.isInDeepWorkMode ? '⚡' : '🌸';
-  const messageText = data.message || 'Mai nhận thấy đây là trang web gây sao nhãng. Bạn có thật sự muốn tiếp tục?';
-
-  const container = document.createElement('div');
-  Object.assign(container.style, {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '20px'
-  });
-
-  const iconEl = document.createElement('span');
-  iconEl.textContent = icon;
-  iconEl.style.fontSize = '48px';
-
-  const messageEl = document.createElement('span');
-  messageEl.textContent = messageText;
-  Object.assign(messageEl.style, { fontSize: '24px', margin: '20px 0' });
-
-  const countdownDiv = document.createElement('div');
-  countdownDiv.id = 'mai-countdown';
-  Object.assign(countdownDiv.style, { fontSize: '20px', margin: '10px 0' });
-  countdownDiv.append('Tab sẽ tự đóng sau ');
-  const countdownSpan = document.createElement('span');
-  countdownSpan.textContent = '5';
-  countdownSpan.style.fontWeight = 'bold';
-  countdownDiv.appendChild(countdownSpan);
-  countdownDiv.append(' giây');
-
-  const buttonsRow = document.createElement('div');
-  Object.assign(buttonsRow.style, { display: 'flex', gap: '20px', marginTop: '20px' });
-
-  const accentColor = data.isDeepWorkBlocked && data.isInDeepWorkMode ? '#8a2be2' : '#FF8FAB';
-
-  const continueBtn = document.createElement('button');
-  continueBtn.id = 'mai-continue-btn';
-  continueBtn.type = 'button';
-  continueBtn.textContent = 'Tiếp tục';
-  Object.assign(continueBtn.style, {
-    backgroundColor: 'white',
-    color: accentColor,
-    border: 'none',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '18px'
-  });
-
-  const backBtn = document.createElement('button');
-  backBtn.id = 'mai-back-btn';
-  backBtn.type = 'button';
-  backBtn.textContent = 'Đóng';
-  Object.assign(backBtn.style, {
-    backgroundColor: accentColor,
-    color: 'white',
-    border: '2px solid white',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '18px'
-  });
-
-  buttonsRow.appendChild(continueBtn);
-  buttonsRow.appendChild(backBtn);
-
-  container.appendChild(iconEl);
-  container.appendChild(messageEl);
-  container.appendChild(countdownDiv);
-  container.appendChild(buttonsRow);
-
-  warningDiv.appendChild(container);
-
-  document.body.appendChild(warningDiv);
-  setupWarningButtons(warningDiv);
-}
-
-/**
- * Setup buttons for distraction warning
- */
-function setupWarningButtons(warningDiv) {
-  const continueBtn = warningDiv?.querySelector?.('#mai-continue-btn');
-  const backBtn = warningDiv?.querySelector?.('#mai-back-btn');
-  const countdownEl = warningDiv?.querySelector?.('#mai-countdown span');
-
-  let secondsLeft = 5;
-  const countdownInterval = setInterval(() => {
-    secondsLeft--;
-    if (secondsLeft > 0) {
-      if (countdownEl) countdownEl.textContent = secondsLeft;
-    } else {
-      clearInterval(countdownInterval);
-      sendMessageSafely({ action: messageActions.closeTab });
-    }
-  }, 1000);
-
-  continueBtn?.addEventListener('click', (event) => {
-    if (!event?.isTrusted) return;
-    clearInterval(countdownInterval);
-    warningDiv.remove();
-  });
-
-  backBtn?.addEventListener('click', (event) => {
-    if (!event?.isTrusted) return;
-    clearInterval(countdownInterval);
-    warningDiv.remove();
-    sendMessageSafely({ action: messageActions.closeTab });
-  });
-}
-
-/******************************************************************************
- * DISTRACTION DETECTION
- ******************************************************************************/
-
-/**
- * [f01][f04c] Kiểm tra xem trang hiện tại có gây sao nhãng không
- * - f01: Kiểm tra trang web gây sao nhãng thông thường
- * - f04c: Kiểm tra thêm trang nhắn tin nếu đang trong Deep Work mode
- * @returns {void}
- */
-function checkIfDistractingSite() {
-  try {
-    if (!isDistractionBlockingEnabled) return;
-
-    const currentUrl = window.location.href;
-    if (!currentUrl || currentUrl === 'about:blank') return;
-
-    sendMessageSafely({
-      action: messageActions.checkCurrentUrl,
-      data: { url: currentUrl }
-    });
-  } catch (error) {
-    console.error('🌸🌸🌸 Error in checkIfDistractingSite:', error);
-  }
-}
-
-/**
- * Schedule a distraction re-check safely (only run when tab is visible).
- * @returns {void}
- */
-function scheduleDistractionRecheck() {
-  if (!isDistractionBlockingEnabled) return;
-
-  if (document.visibilityState === 'visible') {
-    pendingDistractionRecheckWhenVisible = false;
-    refreshDistractionWarningAfterListChange().catch(() => {});
-    return;
-  }
-
-  pendingDistractionRecheckWhenVisible = true;
-}
-
-/**
- * Run a pending distraction re-check when the tab becomes visible.
- * @returns {void}
- */
-function runPendingDistractionRecheck() {
-  if (!pendingDistractionRecheckWhenVisible) return;
-  pendingDistractionRecheckWhenVisible = false;
-  refreshDistractionWarningAfterListChange().catch(() => {});
-}
-
-/**
- * Re-check current URL when the block list changes (and remove warning if no longer distracting).
- * @feature f10 - Context Menu Quick Actions
- * @returns {Promise<void>}
- */
-async function refreshDistractionWarningAfterListChange() {
-  try {
-    if (!isDistractionBlockingEnabled) return;
-
-    const currentUrl = window.location.href;
-    if (!currentUrl || currentUrl === 'about:blank') return;
-
-    const reply = await sendMessageSafely(
-      {
-        action: messageActions.checkCurrentUrl,
-        data: { url: currentUrl }
-      },
-      { timeoutMs: 1200 }
-    );
-
-    if (reply && reply.received && reply.isDistracting === false) {
-      document.getElementById('mai-distraction-warning')?.remove?.();
-    }
-  } catch {
-    // ignore
-  }
-}
-
-/******************************************************************************
- * YOUTUBE INTEGRATION
- ******************************************************************************/
-
-/**
- * Giám sát thay đổi URL trong YouTube SPA để kiểm tra trang gây sao nhãng
- * Sử dụng MutationObserver thay vì polling cho hiệu suất tốt hơn
- * @returns {void}
- */
-function startYouTubeNavigationObserver() {
-  if (!isDistractionBlockingEnabled) return;
-  if (youtubeObserver || youtubeFallbackIntervalId) return;
-
-  lastYoutubeUrl = window.location.href;
-
-  try {
-    // Sử dụng MutationObserver để theo dõi thay đổi DOM thay vì polling
-    youtubeObserver = new MutationObserver(() => {
-      const currentUrl = window.location.href;
-      if (currentUrl !== lastYoutubeUrl) {
-        console.log('🌸 YouTube route changed');
-        lastYoutubeUrl = currentUrl;
-        
-        sendMessageSafely({
-          action: messageActions.youtubeNavigation,
-          data: { url: currentUrl }
-        });
-      }
-    });
-    
-    // Theo dõi thay đổi trong thẻ title và body để phát hiện điều hướng
-    const titleEl = document.querySelector('head > title');
-    if (titleEl) {
-      youtubeObserver.observe(titleEl, { subtree: true, characterData: true, childList: true });
-    }
-    if (document.body) {
-      youtubeObserver.observe(document.body, { childList: true, subtree: true });
-    }
-    
-    console.log('🌸 YouTube navigation observer started');
-  } catch (error) {
-    console.error('🌸🌸🌸 Error setting up YouTube navigation observer:', error);
-    
-    // Fallback to polling if MutationObserver fails
-    lastYoutubeUrl = window.location.href;
-    youtubeObserver = null;
-    youtubeFallbackIntervalId = setInterval(() => {
-      const currentUrl = window.location.href;
-      if (currentUrl !== lastYoutubeUrl) {
-        console.log('🌸 YouTube route changed (fallback method)');
-        lastYoutubeUrl = currentUrl;
-        
-        sendMessageSafely({
-          action: messageActions.youtubeNavigation,
-          data: { url: currentUrl }
-        });
-      }
-    }, 1000);
-  }
-}
-
-/**
- * Stop YouTube SPA navigation observer/polling to reduce overhead when disabled.
- * @returns {void}
- */
-function stopYouTubeNavigationObserver() {
-  try {
-    youtubeObserver?.disconnect?.();
-  } catch (error) {
-    // Ignore
-  }
-  youtubeObserver = null;
-
-  if (youtubeFallbackIntervalId) {
-    clearInterval(youtubeFallbackIntervalId);
-    youtubeFallbackIntervalId = null;
-  }
-
-  lastYoutubeUrl = '';
-}
 
 /******************************************************************************
  * SCRIPT INITIALIZATION
